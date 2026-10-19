@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1A1B21"/><stop offset="1" stop-color="#0A0B0E"/>
+    </linearGradient>
+    <linearGradient id="red" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FF6A55"/><stop offset="1" stop-color="#F23B4C"/>
+    </linearGradient>
+    <clipPath id="dot"><circle cx="512" cy="512" r="300"/></clipPath>
+  </defs>
+  <rect x="32" y="32" width="960" height="960" rx="224" fill="url(#background)"/>
+  <rect x="32.5" y="32.5" width="959" height="959" rx="223.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.07"/>
+  <g clip-path="url(#dot)">
+    <rect x="212" y="212" width="290" height="600" fill="url(#red)"/>
+    <rect x="522" y="212.0" width="300" height="106.2" fill="#F5F5F7"/>
+    <rect x="522" y="376.6" width="300" height="106.2" fill="#F5F5F7"/>
+    <rect x="522" y="541.2" width="300" height="106.2" fill="#F5F5F7"/>
+    <rect x="522" y="705.8" width="300" height="106.2" fill="#F5F5F7"/>
+  </g>
+</svg>

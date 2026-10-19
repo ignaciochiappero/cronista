@@ -1,0 +1,23 @@
+[project]
+name = "cronista"
+version = "0.4.0"
+description = "Screen recorder with live, local speech-to-text (Spanish and English)"
+requires-python = ">=3.11"
+dependencies = [
+    "onnx-asr[cpu]>=0.12",
+    "numpy",
+    "psutil",
+    "threadpoolctl",
+    "pywebview>=5.3",
+    "python-docx",
+    "reportlab>=5.0",
+    "pycaw; sys_platform == 'win32'",
+]
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["slow: loads the speech model (several seconds)"]

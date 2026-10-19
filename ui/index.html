@@ -1,0 +1,760 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cronista</title>
+<style>
+  /* Near-black neutrals with a cool tint, hairline borders, one accent (the logo's red), small
+     fast motion. System fonts only: the app works offline. */
+  :root {
+    color-scheme: dark;
+    --bg: #0b0c0f; --surface: #111216; --surface-2: #17181d; --surface-3: #1e1f25;
+    --border: rgba(255, 255, 255, 0.07); --border-strong: rgba(255, 255, 255, 0.13);
+    --text: #ececef; --text-2: #a3a4ad; --text-3: #6e6f79;
+    --accent: #ff5a4e; --accent-2: #f23b4c; --accent-soft: rgba(255, 90, 78, 0.12); --accent-text: #ff8a7f;
+    --ok: #3ddc97; --warn: #f5b74f;
+    --mark: rgba(255, 200, 87, 0.28);
+    --shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 10px 30px rgba(0, 0, 0, 0.35);
+    --radius: 10px; --radius-lg: 14px;
+    --font: "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, -apple-system, sans-serif;
+    --font-display: "Segoe UI Variable Display", "Segoe UI", Inter, system-ui, sans-serif;
+    --mono: "Cascadia Mono", "Cascadia Code", "JetBrains Mono", Consolas, ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --bg: #f6f6f7; --surface: #ffffff; --surface-2: #f1f1f3; --surface-3: #e9e9ec;
+      --border: rgba(12, 13, 18, 0.08); --border-strong: rgba(12, 13, 18, 0.14);
+      --text: #111216; --text-2: #575864; --text-3: #8b8c96;
+      --accent-soft: rgba(242, 59, 76, 0.09); --accent-text: #d8323f;
+      --mark: rgba(255, 196, 0, 0.32);
+      --shadow: 0 1px 2px rgba(12, 13, 18, 0.04), 0 8px 24px rgba(12, 13, 18, 0.06);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 1px solid var(--border); background: var(--surface-2); border-radius: 8px; padding: 6px 12px; display: inline-flex; align-items: center; gap: 7px; transition: background .12s, border-color .12s, color .12s, opacity .12s; }
+  button:hover:not(:disabled) { background: var(--surface-3); border-color: var(--border-strong); }
+  button:disabled { cursor: default; opacity: .5; }
+  button:focus-visible, input:focus-visible, select:focus-visible, .switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.ghost { background: transparent; border-color: transparent; color: var(--text-2); }
+  button.ghost:hover:not(:disabled) { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+  button.primary { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--text); opacity: .9; }
+  button.danger { color: var(--accent-text); }
+  button.danger:hover:not(:disabled) { background: var(--accent-soft); border-color: transparent; }
+  .icon { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+  input, select { border: 1px solid var(--border); background: var(--surface-2); border-radius: 8px; padding: 7px 10px; outline: none; transition: border-color .12s, background .12s; }
+  input:hover, select:hover { border-color: var(--border-strong); }
+  select { appearance: none; padding-right: 30px; background-image: linear-gradient(45deg, transparent 50%, var(--text-3) 50%), linear-gradient(135deg, var(--text-3) 50%, transparent 50%); background-position: calc(100% - 15px) 52%, calc(100% - 10px) 52%; background-size: 5px 5px; background-repeat: no-repeat; }
+  [hidden] { display: none !important; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border: 3px solid transparent; border-radius: 999px; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background-color: var(--text-3); }
+  ::-webkit-scrollbar-button, ::-webkit-scrollbar-corner { display: none; }
+
+  .app { display: grid; grid-template-rows: 54px 1fr; height: 100%; }
+  header { display: flex; align-items: center; gap: 12px; padding: 0 14px 0 18px; border-bottom: 1px solid var(--border); background: var(--bg); }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand svg { width: 22px; height: 22px; }
+  .brand b { font: 600 15px/1 var(--font-display); letter-spacing: -0.01em; }
+  .pill { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; padding: 4px 10px 4px 9px; border-radius: 999px; background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+  .pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); }
+  .pill.ready i { background: var(--ok); }
+  .pill.busy i { background: var(--warn); animation: blink 1.2s ease-in-out infinite; }
+  .pill.live { color: var(--accent-text); background: var(--accent-soft); border-color: transparent; }
+  .pill.live i { background: var(--accent); animation: blink 1s ease-in-out infinite; }
+  @keyframes blink { 50% { opacity: .35; } }
+  .spacer { flex: 1; }
+  .segmented { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); }
+  .segmented button { border: 0; background: transparent; padding: 3px 9px; font-size: 12px; font-weight: 600; color: var(--text-3); border-radius: 6px; }
+  .segmented button[aria-pressed="true"] { background: var(--surface-3); color: var(--text); }
+
+  .body { display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: 0; }
+  aside { border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; background: var(--bg); }
+  .search { position: relative; padding: 14px 14px 10px; }
+  .search .icon { position: absolute; left: 25px; top: 50%; transform: translateY(-38%); color: var(--text-3); }
+  .search input { width: 100%; padding-left: 34px; background: var(--surface); }
+  .list-head { display: flex; justify-content: space-between; padding: 4px 18px 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
+  .list { overflow-y: auto; scrollbar-gutter: stable; padding: 0 8px 14px; display: flex; flex-direction: column; gap: 2px; }
+  .item { position: relative; display: block; text-align: left; width: 100%; background: transparent; border-color: transparent; padding: 9px 12px 10px; border-radius: 9px; }
+  .item:hover:not(:disabled) { background: var(--surface); border-color: transparent; }
+  .item.selected { background: var(--surface-2); border-color: var(--border); }
+  .item.selected::before { content: ""; position: absolute; left: -1px; top: 12px; bottom: 12px; width: 2px; border-radius: 2px; background: var(--accent); }
+  .item .title { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .meta { color: var(--text-3); font-size: 12px; margin-top: 1px; font-variant-numeric: tabular-nums; }
+  .item .snippet { color: var(--text-2); font-size: 12.5px; margin-top: 4px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .list .none { color: var(--text-3); padding: 8px 12px; font-size: 13px; }
+  mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 2px; }
+
+  main { overflow-y: auto; scrollbar-gutter: stable; }  /* no shift when a scrollbar comes or goes */
+  .column { max-width: 880px; margin: 0 auto; padding: 22px 26px 40px; display: flex; flex-direction: column; gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow); }
+  .banner { border: 1px solid var(--accent-soft); background: var(--accent-soft); color: var(--accent-text); border-radius: var(--radius); padding: 10px 14px; }
+
+  .recorder { padding: 18px 20px 22px; }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .field { position: relative; display: inline-flex; align-items: center; }
+  .field .icon { position: absolute; left: 10px; color: var(--text-3); pointer-events: none; }
+  .field select { padding-left: 32px; }
+  #mic { max-width: 300px; }
+  .switch { display: inline-flex; align-items: center; gap: 9px; padding: 6px 12px 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); cursor: pointer; user-select: none; color: var(--text-2); }
+  .switch:hover { border-color: var(--border-strong); }
+  .switch input { position: absolute; opacity: 0; pointer-events: none; }
+  .switch .track { width: 28px; height: 16px; border-radius: 999px; background: var(--surface-3); border: 1px solid var(--border-strong); position: relative; transition: background .15s; }
+  .switch .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--text-2); transition: transform .15s, background .15s; }
+  .switch input:checked + .track { background: var(--accent); border-color: var(--accent); }
+  .switch input:checked + .track::after { transform: translateX(12px); background: #fff; }
+  .switch input:checked ~ span { color: var(--text); }
+  .switch:has(input:disabled) { opacity: .5; cursor: default; }
+
+  .stage { display: flex; align-items: center; gap: 22px; margin-top: 20px; }
+  .record { position: relative; width: 76px; height: 76px; border-radius: 50%; padding: 0; justify-content: center; background: var(--surface-2); border: 1px solid var(--border-strong); flex: none; }
+  .record::before { content: ""; position: absolute; inset: -7px; border-radius: 50%; border: 1px solid var(--border); transition: border-color .2s, inset .2s; }
+  .record .dot { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(180deg, #ff6a55, var(--accent-2)); box-shadow: 0 6px 18px rgba(242, 59, 76, .35); transition: border-radius .2s, width .2s, height .2s; }
+  .record:hover:not(:disabled) .dot { box-shadow: 0 6px 24px rgba(242, 59, 76, .55); }
+  .record.active { background: var(--accent-soft); border-color: rgba(255, 90, 78, .45); }
+  .record.active::before { border-color: rgba(255, 90, 78, .35); animation: halo 1.6s ease-out infinite; }
+  .record.active .dot { width: 24px; height: 24px; border-radius: 6px; }
+  @keyframes halo { 0% { inset: -4px; opacity: 1; } 100% { inset: -14px; opacity: 0; } }
+  .timer { font: 600 40px/1 var(--font-display); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .hint { color: var(--text-2); margin-top: 6px; font-size: 13px; }
+
+  .card-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px 0; }
+  .card-head h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: blink 1s ease-in-out infinite; }
+  .lines { padding: 10px 18px 16px; }
+  .line { display: grid; grid-template-columns: 58px 1fr; gap: 10px; padding: 5px 8px; margin: 0 -8px; border-radius: 7px; animation: rise .25s ease both; }
+  .line:hover { background: var(--surface-2); }
+  .line .at { font: 12px/22px var(--mono); color: var(--text-3); font-variant-numeric: tabular-nums; }
+  .line .text { line-height: 22px; }
+  #live .lines { padding-bottom: 0; }
+  .partial { color: var(--text-3); font-style: italic; line-height: 22px; min-height: 43px; padding: 5px 18px 16px 86px; }
+  @keyframes rise { from { opacity: 0; transform: translateY(3px); } }
+
+  .detail { padding: 18px 20px 6px; }
+  .title-row { display: flex; align-items: center; gap: 8px; }
+  .title-input { flex: 1; min-width: 0; font: 600 21px/1.25 var(--font-display); letter-spacing: -0.015em; border: 1px solid transparent; background: transparent; padding: 3px 8px; margin-left: -9px; border-radius: 8px; cursor: text; }
+  .title-input:hover { border-color: var(--border); background: var(--surface-2); }
+  .title-input:focus { border-color: var(--accent); background: var(--surface-2); }
+  .meta { color: var(--text-3); font-size: 12.5px; margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 6px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+  .detail .lines { padding: 8px 0 14px; }
+
+  .empty { text-align: center; color: var(--text-2); padding: 56px 24px 40px; }
+  .empty svg { width: 46px; height: 46px; opacity: .9; }
+  .empty h3 { margin: 14px 0 4px; font: 600 17px/1.3 var(--font-display); color: var(--text); }
+  .empty p { margin: 0 auto; max-width: 380px; font-size: 13.5px; }
+
+  .toast { position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 8px); display: inline-flex; align-items: center; gap: 8px; background: var(--surface-3); color: var(--text); border: 1px solid var(--border-strong); box-shadow: var(--shadow); padding: 9px 14px; border-radius: 999px; max-width: 560px; opacity: 0; transition: opacity .18s, transform .18s; pointer-events: none; font-size: 13px; z-index: 30; }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .toast .icon { color: var(--ok); }
+  .toast.error .icon { color: var(--accent); }
+
+  /* The tour: a spotlight that glides from one part of the window to the next, and a card. */
+  .tour { position: fixed; inset: 0; z-index: 40; }
+  .tour-veil { position: absolute; inset: 0; background: rgba(4, 5, 8, .64); transition: opacity .25s; }
+  .tour.spotlit .tour-veil { opacity: 0; }
+  .tour-spot { position: absolute; border-radius: 12px; box-shadow: 0 0 0 100vmax rgba(4, 5, 8, .64), 0 0 0 1px rgba(255, 255, 255, .35); transition: top .35s cubic-bezier(.2, .8, .2, 1), left .35s cubic-bezier(.2, .8, .2, 1), width .35s cubic-bezier(.2, .8, .2, 1), height .35s cubic-bezier(.2, .8, .2, 1), opacity .25s; pointer-events: none; opacity: 0; }
+  .tour.spotlit .tour-spot { opacity: 1; }
+  .tour-card { position: absolute; width: 340px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); box-shadow: 0 24px 60px rgba(0, 0, 0, .45); padding: 16px 18px 14px; transition: top .35s cubic-bezier(.2, .8, .2, 1), left .35s cubic-bezier(.2, .8, .2, 1); }
+  .tour-count { font: 600 11px/1 var(--mono); color: var(--accent-text); letter-spacing: .04em; }
+  .tour-card h3 { margin: 8px 0 6px; font: 600 16px/1.3 var(--font-display); }
+  .tour-card p { margin: 0; color: var(--text-2); font-size: 13.5px; line-height: 1.55; }
+  .tour-bar { height: 2px; background: var(--surface-3); border-radius: 2px; margin: 14px 0 12px; overflow: hidden; }
+  .tour-bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; transition: width .35s; }
+  .tour-actions { display: flex; align-items: center; gap: 6px; }
+  .tour-preview { outline: none; }
+
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="logo-red" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF6A55"/><stop offset="1" stop-color="#F23B4C"/></linearGradient>
+    <clipPath id="logo-dot"><circle cx="12" cy="12" r="10"/></clipPath>
+    <symbol id="logo" viewBox="0 0 24 24">
+      <g clip-path="url(#logo-dot)">
+        <rect x="2" y="2" width="9.6" height="20" fill="url(#logo-red)"/>
+        <rect x="12.4" y="2" width="10" height="3.6" fill="currentColor"/>
+        <rect x="12.4" y="7.6" width="10" height="3.6" fill="currentColor"/>
+        <rect x="12.4" y="13.2" width="10" height="3.6" fill="currentColor"/>
+        <rect x="12.4" y="18.8" width="10" height="3.6" fill="currentColor"/>
+      </g>
+    </symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.5 7A1.5 1.5 0 0 1 5 5.5h4.2l2 2.2H19A1.5 1.5 0 0 1 20.5 9.2v8.3A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.8v12.4a.8.8 0 0 0 1.2.7l9.8-6.2a.8.8 0 0 0 0-1.4L9.2 5.1A.8.8 0 0 0 8 5.8z"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/></symbol>
+    <symbol id="i-word" viewBox="0 0 24 24"><path d="M14 3.5H7A1.5 1.5 0 0 0 5.5 5v14A1.5 1.5 0 0 0 7 20.5h10a1.5 1.5 0 0 0 1.5-1.5V8z"/><path d="M14 3.5V8h4.5"/><path d="m8.5 11.5 1.2 5 1.8-3.6 1.8 3.6 1.2-5"/></symbol>
+    <symbol id="i-pdf" viewBox="0 0 24 24"><path d="M14 3.5H7A1.5 1.5 0 0 0 5.5 5v14A1.5 1.5 0 0 0 7 20.5h10a1.5 1.5 0 0 0 1.5-1.5V8z"/><path d="M14 3.5V8h4.5"/><path d="M12 11v5.5m0 0-2.2-2.2m2.2 2.2 2.2-2.2"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V5.2A.7.7 0 0 1 10.2 4.5h3.6a.7.7 0 0 1 .7.7V7M6.5 7l.9 11.6A1.5 1.5 0 0 0 8.9 20h6.2a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/></symbol>
+    <symbol id="i-pencil" viewBox="0 0 24 24"><path d="m14.5 6 3.5 3.5M5 19l1-4.2L15.8 5a1.4 1.4 0 0 1 2 0l1.2 1.2a1.4 1.4 0 0 1 0 2L9.2 18z"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9.7 9.6a2.4 2.4 0 0 1 4.6 1c0 1.6-2.3 2-2.3 3.4"/><path d="M12 17h.01"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V20.5"/></symbol>
+    <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4.5 16a7.5 7.5 0 1 1 15 0"/><path d="m12 16 3.5-4.5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v4.5M12 16h.01"/></symbol>
+  </defs>
+</svg>
+
+<div class="app">
+  <header>
+    <div class="brand"><svg aria-hidden="true"><use href="#logo"/></svg><b>Cronista</b></div>
+    <span class="pill" id="status"><i></i><span id="statusText">…</span></span>
+    <span class="spacer"></span>
+    <div class="segmented" role="group" aria-label="Language" data-tour="language">
+      <button id="langEn" aria-pressed="false">EN</button>
+      <button id="langEs" aria-pressed="false">ES</button>
+    </div>
+    <button class="ghost" id="help" data-i18n-title="helpTitle"><svg class="icon"><use href="#i-help"/></svg><span data-i18n="help"></span></button>
+    <button class="ghost" id="openFolder" data-i18n-title="openFolderTitle"><svg class="icon"><use href="#i-folder"/></svg><span data-i18n="openFolder"></span></button>
+  </header>
+  <div class="body">
+    <aside data-tour="history">
+      <div class="search"><svg class="icon"><use href="#i-search"/></svg><input id="search" type="search" data-i18n-placeholder="search"></div>
+      <div class="list-head"><span data-i18n="history"></span><span id="count"></span></div>
+      <div class="list" id="list"></div>
+    </aside>
+    <main>
+      <div class="column">
+        <div class="banner" id="banner" hidden></div>
+        <section class="card recorder">
+          <div class="controls">
+            <label class="field" data-tour="mic"><svg class="icon"><use href="#i-mic"/></svg><select id="mic" data-i18n-title="micTitle"></select></label>
+            <label class="field" data-tour="quality"><svg class="icon"><use href="#i-gauge"/></svg><select id="quality" data-i18n-title="qualityTitle"></select></label>
+            <label class="switch" id="systemAudioOption" data-tour="computer" data-i18n-title="computerTitle">
+              <input type="checkbox" id="systemAudio" checked><span class="track"></span><span data-i18n="computer"></span>
+            </label>
+          </div>
+          <div class="stage">
+            <button class="record" id="record" data-tour="record"><span class="dot"></span></button>
+            <div>
+              <div class="timer" id="timer">00:00</div>
+              <div class="hint" id="hint"></div>
+            </div>
+          </div>
+        </section>
+        <section class="card" id="live" data-tour="live" hidden>
+          <div class="card-head"><span class="live-dot"></span><h2 data-i18n="live"></h2></div>
+          <div class="lines" id="phrases"></div>
+          <div class="partial" id="partial"></div>
+        </section>
+        <section class="card detail" id="detail" data-tour="detail" hidden>
+          <div class="title-row">
+            <input class="title-input" id="title" data-i18n-aria="titleLabel" data-i18n-title="titleTip">
+            <button class="ghost" id="rename"><svg class="icon"><use href="#i-pencil"/></svg><span data-i18n="rename"></span></button>
+          </div>
+          <div class="meta" id="meta"></div>
+          <div class="actions" data-tour="exports">
+            <button id="play"><svg class="icon"><use href="#i-play"/></svg><span data-i18n="play"></span></button>
+            <button id="reveal"><svg class="icon"><use href="#i-folder"/></svg><span data-i18n="reveal"></span></button>
+            <button id="copy"><svg class="icon"><use href="#i-copy"/></svg><span data-i18n="copy"></span></button>
+            <button id="word"><svg class="icon"><use href="#i-word"/></svg><span data-i18n="word"></span></button>
+            <button id="pdf"><svg class="icon"><use href="#i-pdf"/></svg><span data-i18n="pdf"></span></button>
+            <span class="spacer"></span>
+            <button id="delete" class="ghost danger"><svg class="icon"><use href="#i-trash"/></svg><span data-i18n="delete"></span></button>
+          </div>
+          <div class="lines" id="transcript"></div>
+        </section>
+        <section class="empty" id="empty">
+          <svg aria-hidden="true"><use href="#logo"/></svg>
+          <h3 data-i18n="emptyTitle"></h3>
+          <p data-i18n="emptyBody"></p>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+<div class="toast" id="toast"><svg class="icon"><use href="#i-check"/></svg><span id="toastText"></span></div>
+<div class="tour" id="tour" hidden>
+  <div class="tour-veil"></div>
+  <div class="tour-spot" id="tourSpot"></div>
+  <div class="tour-card" id="tourCard" role="dialog" aria-modal="true" aria-labelledby="tourTitle">
+    <div class="tour-count" id="tourCount"></div>
+    <h3 id="tourTitle"></h3>
+    <p id="tourBody"></p>
+    <div class="tour-bar"><i id="tourBar"></i></div>
+    <div class="tour-actions">
+      <button class="ghost" id="tourSkip"></button>
+      <span class="spacer"></span>
+      <button id="tourBack"></button>
+      <button class="primary" id="tourNext"></button>
+    </div>
+  </div>
+</div>
+<script>
+  const STRINGS = {
+    en: {
+      help: "Guide", helpTitle: "A short tour of the app", openFolder: "Recordings", openFolderTitle: "Open the folder with all recordings",
+      search: "Search what was said", history: "History", micTitle: "Microphone", qualityTitle: "Video quality",
+      computer: "Computer sound", computerTitle: "Also record what plays on this computer: videos, calls, music",
+      live: "Live transcript", titleLabel: "Recording title", titleTip: "Click to rename. Enter saves, Esc cancels.",
+      rename: "Rename", play: "Play", reveal: "Show in folder", copy: "Copy text", word: "Word", pdf: "PDF", delete: "Delete",
+      emptyTitle: "Press record to start", emptyBody: "What you say shows up live. When you stop, the final transcript is saved next to the video.",
+      loading: "Loading the speech model…", modelError: "Speech model error", cannotRecord: "Cannot record",
+      ready: "Ready", starting: "Starting…", recording: "Recording", finishing: "Writing the transcript…",
+      hintIdle: "Records your main screen and microphone.", hintIdleComputer: "Records your main screen, your microphone and the computer's sound.",
+      hintStarting: "Starting the recorder…", hintRecording: "Press again to stop. The final transcript comes right after.",
+      hintFinishing: "Writing the final transcript. A few seconds per minute recorded.",
+      startRecording: "Start recording", stopRecording: "Stop recording",
+      noMic: "No microphone found", nothingMatches: "Nothing said matches that.", noRecordings: "Your recordings show up here.",
+      noSpeech: "No speech was transcribed.", noSpeechHere: "No speech was transcribed in this recording.",
+      qualities: { best: "Best quality", balanced: "Balanced", smallest: "Smallest files" },
+      saved: "Recording saved", copied: "Transcript copied", wordSaved: "Word file saved next to the video",
+      pdfSaved: "PDF saved next to the video", renamed: "Renamed", deleted: "Recording deleted",
+      confirmDelete: "Delete this recording, its video and its transcripts? This can't be undone.",
+      count: (n) => n === 1 ? "1 recording" : `${n} recordings`,
+      found: (n) => n === 1 ? "1 match" : `${n} matches`,
+      back: "Back", next: "Next", done: "Done", skip: "Skip tour", of: "of",
+      tour: [
+        { title: "Welcome to Cronista", body: "It records your screen and writes down what is said, live, on this computer. Nothing leaves it." },
+        { target: "mic", title: "Your microphone", body: "Choose the microphone to record. Cronista remembers it for next time." },
+        { target: "computer", title: "The computer's sound", body: "On: what plays on the computer, a call or a video, is recorded and transcribed too. With speakers, headphones avoid an echo." },
+        { target: "quality", title: "Video quality", body: "Balanced is the best trade-off. Best quality keeps every detail; Smallest files saves space. Your graphics card does the encoding." },
+        { target: "record", title: "Record", body: "Press to start and again to stop. Cronista records your whole main screen, at its own resolution." },
+        { target: "live", preview: "live", title: "Live transcript", body: "What is said shows up as you speak, in Spanish or English. When you stop, a final pass writes the transcript that gets saved." },
+        { target: "history", title: "History and search", body: "Every recording, newest first. Search finds a recording by anything that was said in it." },
+        { target: "detail", preview: "detail", title: "Each recording", body: "Click the title to rename it. Play the video, open its folder, or copy the text." },
+        { target: "exports", preview: "detail", title: "Word and PDF", body: "Export the transcript with its timestamps. The file is saved next to the video." },
+        { target: "language", title: "Your language", body: "Switch between English and Spanish here. The Guide button brings this tour back." },
+      ],
+      sample: ["Hi everyone, let's go over the plan for this week.", "First, the release: it goes out on Thursday."],
+      sampleTitle: "Weekly planning", errors: {},
+    },
+    es: {
+      help: "Guía", helpTitle: "Un recorrido corto por la app", openFolder: "Grabaciones", openFolderTitle: "Abrir la carpeta con todas las grabaciones",
+      search: "Buscar lo que se dijo", history: "Historial", micTitle: "Micrófono", qualityTitle: "Calidad del video",
+      computer: "Sonido de la PC", computerTitle: "Grabar también lo que suena en la computadora: videos, llamadas, música",
+      live: "Transcripción en vivo", titleLabel: "Título de la grabación", titleTip: "Haz clic para renombrar. Enter guarda, Esc cancela.",
+      rename: "Renombrar", play: "Reproducir", reveal: "Ver en la carpeta", copy: "Copiar texto", word: "Word", pdf: "PDF", delete: "Eliminar",
+      emptyTitle: "Pulsa grabar para empezar", emptyBody: "Lo que digas aparece en vivo. Al detener, la transcripción final se guarda junto al video.",
+      loading: "Cargando el modelo de voz…", modelError: "Error del modelo de voz", cannotRecord: "No se puede grabar",
+      ready: "Listo", starting: "Iniciando…", recording: "Grabando", finishing: "Escribiendo la transcripción…",
+      hintIdle: "Graba tu pantalla principal y el micrófono.", hintIdleComputer: "Graba tu pantalla principal, el micrófono y el sonido de la computadora.",
+      hintStarting: "Iniciando la grabación…", hintRecording: "Vuelve a pulsar para detener. La transcripción final llega enseguida.",
+      hintFinishing: "Escribiendo la transcripción final. Unos segundos por minuto grabado.",
+      startRecording: "Empezar a grabar", stopRecording: "Detener la grabación",
+      noMic: "No se encontró ningún micrófono", nothingMatches: "Nada de lo dicho coincide.", noRecordings: "Aquí aparecen tus grabaciones.",
+      noSpeech: "No se transcribió ninguna voz.", noSpeechHere: "En esta grabación no se transcribió ninguna voz.",
+      qualities: { best: "Máxima calidad", balanced: "Equilibrada", smallest: "Archivos más pequeños" },
+      saved: "Grabación guardada", copied: "Transcripción copiada", wordSaved: "Archivo de Word guardado junto al video",
+      pdfSaved: "PDF guardado junto al video", renamed: "Nombre cambiado", deleted: "Grabación eliminada",
+      confirmDelete: "¿Eliminar esta grabación, su video y sus transcripciones? No se puede deshacer.",
+      count: (n) => n === 1 ? "1 grabación" : `${n} grabaciones`,
+      found: (n) => n === 1 ? "1 resultado" : `${n} resultados`,
+      back: "Atrás", next: "Siguiente", done: "Listo", skip: "Saltar guía", of: "de",
+      tour: [
+        { title: "Te damos la bienvenida a Cronista", body: "Graba tu pantalla y escribe lo que se dice, en vivo y en esta computadora. Nada sale de ella." },
+        { target: "mic", title: "Tu micrófono", body: "Elige el micrófono para grabar. Cronista lo recuerda para la próxima vez." },
+        { target: "computer", title: "El sonido de la computadora", body: "Activado: lo que suena en la computadora, una llamada o un video, también se graba y se transcribe. Con altavoces, usar auriculares evita el eco." },
+        { target: "quality", title: "Calidad del video", body: "Equilibrada es la mejor relación. Máxima calidad conserva cada detalle; Archivos más pequeños ahorra espacio. La tarjeta gráfica se encarga de la codificación." },
+        { target: "record", title: "Grabar", body: "Pulsa para empezar y otra vez para detener. Cronista graba toda tu pantalla principal, en su resolución." },
+        { target: "live", preview: "live", title: "Transcripción en vivo", body: "Lo que se dice aparece mientras hablas, en español o en inglés. Al detener, una pasada final escribe la transcripción que se guarda." },
+        { target: "history", title: "Historial y búsqueda", body: "Todas tus grabaciones, de la más nueva a la más vieja. El buscador encuentra una grabación por cualquier cosa que se dijo en ella." },
+        { target: "detail", preview: "detail", title: "Cada grabación", body: "Haz clic en el título para renombrarla. Reproduce el video, abre su carpeta o copia el texto." },
+        { target: "exports", preview: "detail", title: "Word y PDF", body: "Exporta la transcripción con sus marcas de tiempo. El archivo se guarda junto al video." },
+        { target: "language", title: "Tu idioma", body: "Cambia entre inglés y español desde aquí. El botón Guía vuelve a abrir este recorrido." },
+      ],
+      sample: ["Hola a todos, repasemos el plan de esta semana.", "Primero, el lanzamiento: sale el jueves."],
+      sampleTitle: "Planificación semanal",
+      // What the app says from Python, which writes it in English, in Spanish.
+      errors: {
+        "A recording is already running.": "Ya hay una grabación en curso.",
+        "The speech model is still loading.": "El modelo de voz todavía se está cargando.",
+        "No microphone found. Plug one in and try again.": "No se encontró ningún micrófono. Conecta uno y vuelve a intentarlo.",
+        "ffmpeg was not found. Install it with: winget install ffmpeg": "No se encontró ffmpeg. Instálalo con: winget install ffmpeg",
+        "The video file is no longer there.": "El video ya no está en su carpeta.",
+        "Recording not found.": "No se encontró la grabación.",
+        "Enter a title.": "Escribe un título.",
+        "Saving the recording before closing…": "Guardando la grabación antes de cerrar…",
+        "The microphone was disconnected, so it is not being recorded. It comes back when it is plugged in again.": "El micrófono se desconectó y no se está grabando. Vuelve en cuanto lo conectes.",
+        "No speakers or headphones found, so the computer's sound is not being recorded. It starts when one is connected.": "No se encontraron altavoces ni auriculares, así que el sonido de la computadora no se graba. Empieza cuando conectes uno.",
+        "The recorder stopped. Saving what was recorded.": "La grabación se detuvo. Se guarda lo que se grabó.",
+        "Saving the recording failed:": "No se pudo guardar la grabación:",
+        "The speech model did not load:": "No se cargó el modelo de voz:",
+        "The microphone can't be recorded:": "No se puede grabar el micrófono:",
+        "The computer's sound can't be recorded:": "No se puede grabar el sonido de la computadora:",
+        "Putting the screen and the sound together failed:": "No se pudieron unir la pantalla y el sonido:",
+      },
+      patterns: [[/^(.+) is open in another program\. Close it and try again\.$/, "$1 está abierto en otro programa. Ciérralo y vuelve a intentarlo."]],
+    },
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const api = () => window.pywebview.api;
+  const ui = { lang: "en", phase: "idle", model: "loading", recorderError: "", selected: null, title: "", startedAt: null, timer: null, count: 0, state: null };
+  const t = (key) => STRINGS[ui.lang][key] ?? STRINGS.en[key] ?? key;
+  // Python's messages are English; known ones, or known beginnings, are said in the page's language.
+  const say = (message) => {
+    const errors = STRINGS[ui.lang].errors || {};
+    if (!message) return "";
+    if (errors[message]) return errors[message];
+    const pattern = (STRINGS[ui.lang].patterns || []).find(([english]) => english.test(message));
+    if (pattern) return message.replace(pattern[0], pattern[1]);
+    const start = Object.keys(errors).find((key) => key.endsWith(":") && message.startsWith(key));
+    if (start) return errors[start] + message.slice(start.length);
+    const sentence = Object.keys(errors).find((key) => message.startsWith(key));
+    return sentence ? errors[sentence] + message.slice(sentence.length) : message;
+  };
+
+  const escapeHtml = (text) => String(text ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const clock = (seconds) => {
+    seconds = Math.max(0, Math.floor(seconds));
+    const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60), s = seconds % 60;
+    const mm = String(m).padStart(2, "0"), ss = String(s).padStart(2, "0");
+    return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+  };
+  const megabytes = (bytes) => `${(bytes / 1e6).toFixed(bytes < 1e7 ? 1 : 0)} MB`;
+  const when = (iso) => new Date(iso).toLocaleString(ui.lang, { dateStyle: "medium", timeStyle: "short" });
+  const lineHtml = (start, text) => `<div class="line"><span class="at">${clock(start)}</span><span class="text">${escapeHtml(text)}</span></div>`;
+
+  function toast(message, isError = false) {
+    const el = $("toast");
+    $("toastText").textContent = message;
+    el.querySelector("use").setAttribute("href", isError ? "#i-alert" : "#i-check");
+    el.classList.toggle("error", isError);
+    el.classList.add("show");
+    clearTimeout(el._hide);
+    el._hide = setTimeout(() => el.classList.remove("show"), isError ? 6000 : 2600);
+  }
+
+  function applyLanguage() {
+    document.documentElement.lang = ui.lang;
+    document.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = t(el.dataset.i18n); });
+    document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => { el.placeholder = t(el.dataset.i18nPlaceholder); });
+    document.querySelectorAll("[data-i18n-title]").forEach((el) => { el.title = t(el.dataset.i18nTitle); });
+    document.querySelectorAll("[data-i18n-aria]").forEach((el) => { el.setAttribute("aria-label", t(el.dataset.i18nAria)); });
+    $("langEn").setAttribute("aria-pressed", String(ui.lang === "en"));
+    $("langEs").setAttribute("aria-pressed", String(ui.lang === "es"));
+    if (ui.state) fillControls(ui.state);
+    render();
+  }
+
+  function render() {
+    const busy = ui.phase !== "idle";
+    const status = $("status");
+    status.className = "pill";
+    let text;
+    if (ui.recorderError) text = t("cannotRecord");
+    else if (ui.model === "loading") { text = t("loading"); status.classList.add("busy"); }
+    else if (ui.model === "error") text = t("modelError");
+    else if (ui.phase === "recording") { text = `${t("recording")} ${clock(Date.now() / 1000 - ui.startedAt)}`; status.classList.add("live"); }
+    else if (ui.phase === "listening") { text = t("starting"); status.classList.add("live"); }
+    else if (ui.phase === "finishing") { text = t("finishing"); status.classList.add("busy"); }
+    else { text = t("ready"); status.classList.add("ready"); }
+    $("statusText").textContent = text;
+
+    const record = $("record");
+    record.classList.toggle("active", ui.phase === "listening" || ui.phase === "recording");
+    record.disabled = ui.phase === "finishing" || (!busy && (ui.model !== "ready" || !!ui.recorderError));
+    record.setAttribute("aria-label", busy ? t("stopRecording") : t("startRecording"));
+    record.title = record.getAttribute("aria-label");
+    $("mic").disabled = $("quality").disabled = $("systemAudio").disabled = busy;
+    const withComputer = !$("systemAudioOption").hidden && $("systemAudio").checked;
+    $("hint").textContent = {
+      idle: withComputer ? t("hintIdleComputer") : t("hintIdle"),
+      listening: t("hintStarting"), recording: t("hintRecording"), finishing: t("hintFinishing"),
+    }[ui.phase];
+    if (ui.phase === "recording") $("timer").textContent = clock(Date.now() / 1000 - ui.startedAt);
+    else if (ui.phase === "idle") $("timer").textContent = "00:00";
+
+    if (!tour.preview) {
+      $("live").hidden = !busy;
+      $("detail").hidden = busy || !ui.selected;
+      $("empty").hidden = busy || !!ui.selected;
+    }
+  }
+
+  function setPhase(phase) {
+    ui.phase = phase;
+    clearInterval(ui.timer);
+    if (phase === "recording") ui.timer = setInterval(render, 500);
+    render();
+  }
+
+  function addPhrase(start, text) {
+    $("phrases").insertAdjacentHTML("beforeend", lineHtml(start, text));
+    $("partial").textContent = "";
+    $("phrases").lastElementChild.scrollIntoView({ block: "nearest" });
+  }
+
+  window.cronista = {
+    onEvent(kind, payload) {
+      const handlers = {
+        model: (p) => { ui.model = p.state; if (p.state === "error") showBanner(say(p.message)); render(); },
+        listening: () => setPhase("listening"),
+        recording: (p) => { ui.startedAt = p.started_at; setPhase("recording"); },
+        partial: (p) => { $("partial").innerHTML = `${escapeHtml(p.committed)} <span style="opacity:.6">${escapeHtml(p.pending)}</span>`; },
+        phrase: (p) => addPhrase(p.start, p.text),
+        finalizing: () => setPhase("finishing"),
+        saved: async (p) => { setPhase("idle"); await refreshList(); await select(p.id); toast(t("saved")); },
+        notice: (p) => toast(say(p.message)),
+        error: (p) => { toast(say(p.message), true); setPhase("idle"); },
+      };
+      (handlers[kind] || (() => {}))(payload);
+    },
+  };
+
+  function showBanner(message) {
+    $("banner").textContent = message;
+    $("banner").hidden = !message;
+  }
+
+  async function refreshList() {
+    const query = $("search").value.trim();
+    const items = await api().recordings(query);
+    const list = $("list");
+    list.innerHTML = "";
+    if (!query) ui.count = items.length;
+    $("count").textContent = query ? t("found")(items.length) : ui.count ? t("count")(ui.count) : "";
+    if (!items.length) {
+      list.innerHTML = `<div class="none">${query ? t("nothingMatches") : t("noRecordings")}</div>`;
+      return;
+    }
+    for (const item of items) {
+      const button = document.createElement("button");
+      button.className = "item" + (item.id === ui.selected ? " selected" : "");
+      const snippet = escapeHtml(item.snippet || "").replace(/\[/g, "<mark>").replace(/\]/g, "</mark>");
+      button.innerHTML = `<div class="title">${escapeHtml(item.title)}</div>
+        <div class="meta">${when(item.created_at)} · ${clock(item.duration_seconds)} · ${megabytes(item.size_bytes)}</div>
+        <div class="snippet">${snippet || t("noSpeech")}</div>`;
+      button.onclick = () => select(item.id);
+      button.ondblclick = () => startRenaming(item.id);
+      list.appendChild(button);
+    }
+  }
+
+  async function select(id) {
+    const record = await api().recording(id);
+    if (!record) return;
+    ui.selected = id;
+    ui.title = record.title;
+    ui.record = record;
+    showRecord(record);
+    await refreshList();
+    render();
+  }
+
+  function showRecord(record) {
+    $("title").value = record.title;
+    $("meta").textContent = `${when(record.created_at)} · ${clock(record.duration_seconds)} · ${megabytes(record.size_bytes)}`;
+    $("transcript").innerHTML = record.segments.length
+      ? record.segments.map((s) => lineHtml(s.start, s.text)).join("")
+      : `<p class="hint">${t("noSpeechHere")}</p>`;
+  }
+
+  async function startRenaming(id) {
+    if (id !== ui.selected) await select(id);
+    const title = $("title");
+    title.focus();
+    title.select();
+  }
+
+  async function act(call, okMessage) {
+    const result = await call();
+    if (result && result.error) toast(say(result.error), true);
+    else if (okMessage) toast(okMessage);
+    return result;
+  }
+
+  function fillControls(state) {
+    const mic = $("mic");
+    const chosen = mic.value || state.settings.microphone;
+    mic.innerHTML = state.microphones.length
+      ? state.microphones.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`).join("")
+      : `<option value="">${t("noMic")}</option>`;
+    if (chosen) mic.value = chosen;
+    const quality = $("quality");
+    const level = quality.value || state.settings.quality;
+    quality.innerHTML = state.qualities.map((q) => `<option value="${q}">${t("qualities")[q] || q}</option>`).join("");
+    quality.value = level;
+  }
+
+  async function setLanguage(lang) {
+    if (lang === ui.lang) return;
+    ui.lang = lang;
+    applyLanguage();
+    await refreshList();
+    if (ui.record && !tour.preview) showRecord(ui.record);
+    if (tour.open) tour.show(tour.index);
+    api().save_preferences(lang, null);
+  }
+
+  // --- the tour ------------------------------------------------------------------------------
+  const tour = {
+    open: false, index: 0, preview: null,
+    start() {
+      this.open = true;
+      $("tour").hidden = false;
+      this.show(0);
+      $("tourNext").focus();
+    },
+    finish() {
+      this.open = false;
+      this.unpreview();
+      $("tour").hidden = true;
+      api().save_preferences(null, true);
+    },
+    steps() { return STRINGS[ui.lang].tour; },
+    show(index) {
+      const steps = this.steps();
+      this.index = Math.max(0, Math.min(index, steps.length - 1));
+      const step = steps[this.index];
+      if (step.preview !== this.preview) { this.unpreview(); this.doPreview(step.preview); }
+      $("tourCount").textContent = `${this.index + 1} ${t("of")} ${steps.length}`;
+      $("tourTitle").textContent = step.title;
+      $("tourBody").textContent = step.body;
+      $("tourBar").style.width = `${((this.index + 1) / steps.length) * 100}%`;
+      $("tourBack").textContent = t("back");
+      $("tourBack").hidden = this.index === 0;
+      $("tourNext").textContent = this.index === steps.length - 1 ? t("done") : t("next");
+      $("tourSkip").textContent = t("skip");
+      $("tourSkip").hidden = this.index === steps.length - 1;
+      requestAnimationFrame(() => this.place(step));
+    },
+    // Some parts only show while recording, or with a recording open: the tour shows them with an example.
+    doPreview(kind) {
+      this.preview = kind || null;
+      if (!kind) return;
+      const sample = STRINGS[ui.lang].sample;
+      if (kind === "live" && ui.phase === "idle") {
+        $("phrases").innerHTML = sample.map((text, i) => lineHtml(i * 4, text)).join("");
+        $("partial").textContent = "";
+        $("live").hidden = false;
+        $("detail").hidden = true;
+        $("empty").hidden = true;
+      } else if (kind === "detail" && !ui.selected && ui.phase === "idle") {
+        $("title").value = STRINGS[ui.lang].sampleTitle;
+        $("meta").textContent = `${when(new Date().toISOString())} · 12:34 · 48 MB`;
+        $("transcript").innerHTML = sample.map((text, i) => lineHtml(i * 4, text)).join("");
+        $("detail").hidden = false;
+        $("live").hidden = true;
+        $("empty").hidden = true;
+      } else {
+        this.preview = null;
+      }
+    },
+    unpreview() {
+      if (!this.preview) return;
+      this.preview = null;
+      if (ui.phase === "idle") $("phrases").innerHTML = "";
+      if (ui.record) showRecord(ui.record);
+      render();
+    },
+    place(step) {
+      const spot = $("tourSpot"), card = $("tourCard"), root = $("tour");
+      const target = step.target && document.querySelector(`[data-tour="${step.target}"]`);
+      const box = target && !target.closest("[hidden]") ? target.getBoundingClientRect() : null;
+      const margin = 14, width = innerWidth, height = innerHeight, cardBox = card.getBoundingClientRect();
+      if (!box || box.width === 0) {
+        root.classList.remove("spotlit");
+        card.style.left = `${(width - cardBox.width) / 2}px`;
+        card.style.top = `${(height - cardBox.height) / 2}px`;
+        return;
+      }
+      root.classList.add("spotlit");
+      const pad = 6;
+      spot.style.left = `${box.left - pad}px`;
+      spot.style.top = `${box.top - pad}px`;
+      spot.style.width = `${box.width + pad * 2}px`;
+      spot.style.height = `${box.height + pad * 2}px`;
+      // Beside the part if there is room, otherwise below or above it.
+      let left, top;
+      if (box.right + margin + cardBox.width < width - margin) { left = box.right + margin + pad; top = box.top; }
+      else if (box.bottom + margin + cardBox.height < height - margin) { left = box.left; top = box.bottom + margin + pad; }
+      else { left = box.left; top = box.top - cardBox.height - margin - pad; }
+      card.style.left = `${Math.max(margin, Math.min(left, width - cardBox.width - margin))}px`;
+      card.style.top = `${Math.max(margin, Math.min(top, height - cardBox.height - margin))}px`;
+    },
+  };
+
+  async function init() {
+    const state = await api().state();
+    ui.state = state;
+    ui.lang = state.settings.language || ((navigator.language || "en").toLowerCase().startsWith("es") ? "es" : "en");
+    ui.model = state.model.state;
+    ui.phase = state.phase;
+    ui.recorderError = state.recorder_error;
+    $("systemAudioOption").hidden = !state.system_audio_supported;
+    $("systemAudio").checked = state.settings.system_audio;
+    applyLanguage();
+    if (state.recorder_error) showBanner(say(state.recorder_error));
+    else if (state.model.state === "error") showBanner(say(state.model.message));
+
+    $("systemAudio").onchange = render;
+    $("langEn").onclick = () => setLanguage("en");
+    $("langEs").onclick = () => setLanguage("es");
+    $("help").onclick = () => tour.start();
+    $("tourNext").onclick = () => (tour.index === tour.steps().length - 1 ? tour.finish() : tour.show(tour.index + 1));
+    $("tourBack").onclick = () => tour.show(tour.index - 1);
+    $("tourSkip").onclick = () => tour.finish();
+    addEventListener("resize", () => tour.open && tour.place(tour.steps()[tour.index]));
+    addEventListener("keydown", (e) => {
+      if (!tour.open) return;
+      if (e.key === "Escape") tour.finish();
+      else if (e.key === "ArrowRight") $("tourNext").click();
+      else if (e.key === "ArrowLeft" && tour.index > 0) tour.show(tour.index - 1);
+    });
+
+    $("record").onclick = async () => {
+      if (ui.phase === "idle") {
+        $("phrases").innerHTML = "";
+        $("partial").textContent = "";
+        const systemAudio = state.system_audio_supported && $("systemAudio").checked;
+        const result = await act(() => api().start($("mic").value, $("quality").value, systemAudio, ui.lang));
+        if (result && result.ok) setPhase("listening");
+      } else {
+        await api().stop();
+        setPhase("finishing");
+      }
+    };
+    $("openFolder").onclick = () => act(() => api().open_recordings_folder());
+    $("play").onclick = () => act(() => api().play(ui.selected));
+    $("reveal").onclick = () => act(() => api().reveal(ui.selected));
+    $("copy").onclick = async () => {
+      const result = await act(() => api().copy_text(ui.selected));
+      if (result && result.text !== undefined) await navigator.clipboard.writeText(result.text);
+      if (result && !result.error) toast(t("copied"));
+    };
+    $("word").onclick = () => act(() => api().export_word(ui.selected, ui.lang), t("wordSaved"));
+    $("pdf").onclick = () => act(() => api().export_pdf(ui.selected, ui.lang), t("pdfSaved"));
+    $("delete").onclick = async () => {
+      if (!confirm(t("confirmDelete"))) return;
+      await act(() => api().delete(ui.selected), t("deleted"));
+      ui.selected = null;
+      ui.record = null;
+      await refreshList();
+      render();
+    };
+    const rename = async () => {
+      const title = $("title").value.trim();
+      if (!ui.selected || tour.preview) return;
+      if (!title) { $("title").value = ui.title; return; }  // an empty title puts the old one back
+      if (title === ui.title) return;
+      const result = await act(() => api().rename(ui.selected, title), t("renamed"));
+      if (result && result.ok) { ui.title = title; if (ui.record) ui.record.title = title; }
+      await refreshList();
+    };
+    $("title").addEventListener("change", rename);
+    $("title").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") e.target.blur();
+      if (e.key === "Escape") { e.target.value = ui.title; e.target.blur(); }  // back to the saved title
+    });
+    $("rename").onclick = () => startRenaming(ui.selected);
+    let searchTimer;
+    $("search").addEventListener("input", () => { clearTimeout(searchTimer); searchTimer = setTimeout(refreshList, 220); });
+
+    await refreshList();
+    render();
+    if (!state.settings.tour_seen) setTimeout(() => tour.start(), 450);
+  }
+
+  window.addEventListener("pywebviewready", init);
+</script>
+</body>
+</html>
