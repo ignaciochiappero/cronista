@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+.pytest_cache/
+models/
+build/
+dist/
+build-log.txt
+*.log
+.claude/

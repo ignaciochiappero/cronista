@@ -1,0 +1,23 @@
+Cronista
+Copyright 2026 Nacho Chiappero
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this software except in compliance with the License.
+A copy of the License is in the LICENSE file, and at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+cronista/engine/local_agreement.py and cronista/engine/voice_activity.py are
+ported from bavel, a fork of gemma-translator
+(https://github.com/google-gemma/gemma-translator):
+Copyright 2026 Google LLC, licensed under the Apache License, Version 2.0.
+
+The installer also contains third-party software under its own licenses,
+FFmpeg (GPL v3) and the Parakeet TDT speech model (CC BY 4.0) among them.
+See THIRD-PARTY-NOTICES.md.
