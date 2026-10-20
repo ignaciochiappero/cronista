@@ -4,20 +4,20 @@
 
 **Graba tu pantalla y escribe lo que se dice, en vivo.**
 
-Cronista graba tu pantalla principal, tu micrófono y el sonido de tu computadora, y escribe lo que se dice mientras hablas, en español o en inglés. Al detener, una pasada final sobre toda la grabación escribe la transcripción que se guarda junto al video. Todo ocurre en tu computadora: el modelo de voz corre en ella y nada se envía a ningún lado.
+Cronista graba tu pantalla principal, tu micrófono y el sonido de tu computadora, y escribe lo que se dice mientras hablas, en español o en inglés, distinguiéndote de quienes están en la llamada. Al detener, una pasada final sobre toda la grabación escribe la transcripción que se guarda junto al video y, si quieres, una copia del video con subtítulos. Todo ocurre en tu computadora: el modelo de voz corre en ella y nada se envía a ningún lado.
 
 [Read in English](README.md)
 
 <picture>
   <source srcset="docs/tour-es.avif" type="image/avif" />
-  <img src="docs/screenshot-es.png" alt="Un recorrido por la app: grabar con el sonido de la computadora, la transcripción en vivo, la grabación guardada, cambiarle el nombre, buscar en el historial y exportar a Word y PDF." />
+  <img src="docs/screenshot-es.png" alt="Un recorrido por la app: nombrar la voz de la computadora, toda la pantalla grabándose, la transcripción en vivo diciendo quién habló, el video subtitulado, buscar en el historial y exportar a Word y PDF." />
 </picture>
 
 ![Cronista con una grabación abierta: su transcripción, los controles de grabación y el historial](docs/screenshot-es.png)
 
 ## Instalación
 
-Descarga **Cronista-Setup-0.4.0.exe** desde la [página de versiones](https://github.com/ignaciochiappero/cronista/releases/latest) y ejecútalo. Se instala solo para tu usuario, sin permisos de administrador, y agrega un acceso en el menú Inicio. Trae todo lo que necesita: el modelo de voz y FFmpeg.
+Descarga **Cronista-Setup-0.5.0.exe** desde la [página de versiones](https://github.com/ignaciochiappero/cronista/releases/latest) y ejecútalo. Se instala solo para tu usuario, sin permisos de administrador, y agrega un acceso en el menú Inicio. Trae todo lo que necesita: el modelo de voz y FFmpeg.
 
 El instalador todavía no está firmado, así que Windows SmartScreen muestra un aviso: elige **Más información** y después **Ejecutar de todas formas**. [SECURITY.md](SECURITY.md) (en inglés) explica qué graba la app, dónde lo guarda y cómo verificar la descarga.
 
@@ -25,8 +25,9 @@ El instalador todavía no está firmado, así que Windows SmartScreen muestra un
 
 1. Elige tu micrófono y la calidad del video.
 2. Deja activado **Sonido de la PC** para grabar también lo que suena en la computadora: una llamada, un video, música.
-3. Pulsa el botón rojo y habla. La transcripción aparece mientras hablas.
-4. Vuelve a pulsarlo para detener. Unos segundos después, la grabación aparece primera en el historial, con su transcripción final.
+3. Si quieres, ponle nombre a cada voz: haz clic en **Yo** u **Otros**, debajo de los controles (por ejemplo, **Ana** para quien está en la llamada).
+4. Pulsa el botón rojo y habla. La transcripción aparece mientras hablas, cada línea con quién la dijo.
+5. Vuelve a pulsarlo para detener. Unos segundos después, la grabación aparece primera en el historial, con su transcripción final.
 
 La primera vez, una guía corta te muestra la app. El botón **Guía** la vuelve a abrir.
 
@@ -36,10 +37,12 @@ La primera vez, una guía corta te muestra la app. El botón **Guía** la vuelve
 |---|---|
 | **Grabar** | Toda tu pantalla principal en su resolución, tu micrófono y el sonido de la computadora, mezclados. Hasta cuatro horas por grabación. |
 | **Leer en vivo** | Las palabras aparecen a medida que se dicen. La transcripción que se guarda sale de una pasada final sobre toda la grabación, que es más precisa. |
+| **Saber quién habló** | Tu micrófono y el sonido de la computadora se transcriben por separado, así cada línea dice si fuiste tú o la llamada. Ponle nombre a cada uno con un clic en su etiqueta; las etiquetas de una grabación se pueden cambiar después desde su transcripción. |
+| **Subtitular** | **Video subtitulado** hace `recording-subtitled.mp4`, con la transcripción y quién dijo cada línea en pantalla. Activa **Copia subtitulada** para que se haga cada vez que termina una grabación. |
 | **Encontrar** | Busca en el historial por cualquier cosa que se dijo. Los resultados aparecen mientras escribes. |
 | **Renombrar** | Haz clic en el título de una grabación (o en **Renombrar**, o doble clic en el historial). Enter guarda, Esc cancela. |
-| **Exportar** | **Word** y **PDF** escriben la transcripción con sus marcas de tiempo, junto al video. |
-| **Ver** | **Reproducir** abre el video en tu reproductor; **Ver en la carpeta** abre su carpeta. |
+| **Exportar** | **Word** y **PDF** escriben la transcripción con sus marcas de tiempo y quién habló, junto al video. |
+| **Ver** | **Reproducir** abre el video en tu reproductor; **Carpeta** abre su carpeta. |
 | **A tu manera** | Español o inglés, con **EN / ES** arriba. Claro u oscuro, según Windows. |
 
 Cada grabación tiene su carpeta en `Videos\Cronista`:
@@ -50,9 +53,10 @@ Cada grabación tiene su carpeta en `Videos\Cronista`:
 | `transcript.srt` | La transcripción como subtítulos, con marcas de tiempo |
 | `transcript.txt` | La transcripción como texto plano, una frase por línea |
 | `transcript.docx`, `transcript.pdf` | Cuando los exportas |
+| `recording-subtitled.mp4` | El video con subtítulos, cuando lo haces |
 | `recorder.log` | Lo que informó FFmpeg durante la grabación, por si algo falla |
 
-**Sonido de la PC** sigue al dispositivo de reproducción predeterminado de Windows, así que puedes conectar auriculares en medio de una grabación. Con altavoces en lugar de auriculares, el micrófono también capta ese sonido unos 40 ms después, y se oye como un eco: los auriculares lo evitan.
+**Sonido de la PC** sigue al dispositivo de reproducción predeterminado de Windows, así que puedes conectar auriculares en medio de una grabación. Con altavoces en lugar de auriculares, el micrófono también capta ese sonido unos 40 ms después, y en el video se oye como un eco; la transcripción deja afuera las líneas en que el micrófono solo repitió la llamada, pero con auriculares las dos fuentes quedan limpias.
 
 ### Requisitos
 
