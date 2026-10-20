@@ -39,7 +39,7 @@ The first time, a short guide shows you around. **Guide** brings it back.
 | **Read it live** | The words show up as they are said. The saved transcript comes from a final pass over the whole recording, which is more accurate. |
 | **Transcribe a file** | Drop audio or video anywhere on the window, in any format FFmpeg reads (MP3, WAV, M4A, OGG, FLAC, MP4, MKV, MOV, WebM and more), or click **Transcribe a file**. Its transcript shows up as it is written, and it joins the history like a recording; files dropped together wait their turn. The file is not copied: **Play** and **Show in folder** open it where it is, and **Delete** removes only its transcript. |
 | **Know who said it** | Your microphone and the computer's sound are transcribed apart, so every line says whether it was you or the call. Name each with a click on its label; a recording's labels can be renamed later from its transcript. |
-| **Subtitle it** | **Subtitled video** makes `recording-subtitled.mp4`, with the transcript and who said each line on screen. Turn on **Subtitled copy** to get it every time a recording stops. |
+| **Subtitle it** | **Subtitled video** makes `recording-subtitled.mp4`, with the transcript and who said each line on screen. While it is made, the button fills up and says how long is left. Turn on **Subtitled copy** to get it every time a recording stops. |
 | **Find it** | Search the history by anything that was said. Results come as you type. |
 | **Rename it** | Click a recording's title (or **Rename**, or double-click it in the history). Enter saves, Esc cancels. |
 | **Export it** | **Word** and **PDF** write the transcript with its timestamps and who spoke, next to the video. |

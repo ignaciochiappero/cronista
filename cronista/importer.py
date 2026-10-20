@@ -11,12 +11,11 @@ from __future__ import annotations
 
 import re
 import subprocess
-import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .engine.ffmpeg_locator import NO_WINDOW
+from .engine.ffmpeg_locator import NO_WINDOW, run_with_progress
 from .engine.final_pass import run_final_pass_file
 from .engine.transcript import TranscriptionSegment
 
@@ -86,28 +85,13 @@ def decode_audio(ffmpeg: str, path: Path, target: Path, *, progress: Callable[[f
     command = [ffmpeg, "-hide_banner", "-nostdin", "-loglevel", "error", "-y", "-i", str(path),
                "-map", "0:a:0", "-vn", "-sn", "-dn", "-ac", "1", "-ar", str(SAMPLE_RATE), "-f", "f32le",
                "-progress", "pipe:1", "-stats_period", "0.25", str(target)]
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-                               encoding="utf-8", errors="replace", **NO_WINDOW)
-    errors: list[str] = []
-    reader = threading.Thread(target=lambda: errors.extend(process.stderr), daemon=True)
-    reader.start()
     try:
-        for line in process.stdout:
-            if stopped():
-                raise Cancelled
-            key, _, value = line.strip().partition("=")
-            if key == "out_time_us" and value.isdigit():
-                progress(int(value) / 1e6)
-        process.wait()
-        reader.join(timeout=5)
+        code, errors = run_with_progress(command, progress=progress, stopped=stopped)
         if stopped():
             raise Cancelled
-        if process.returncode != 0:
-            raise ImportFailed(f"Reading the file's sound failed: {''.join(errors).strip()[-300:]}")
+        if code != 0:
+            raise ImportFailed(f"Reading the file's sound failed: {errors.strip()[-300:]}")
     except BaseException:
-        if process.poll() is None:
-            process.kill()
-            process.wait()
         target.unlink(missing_ok=True)
         raise
     progress(target.stat().st_size / 4 / SAMPLE_RATE)

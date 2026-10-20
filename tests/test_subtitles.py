@@ -60,6 +60,17 @@ def test_the_copy_has_the_subtitles_burned_in_and_the_same_sound(tmp_path: Path)
     assert streams == ["video", "audio"]
 
 
+@pytest.mark.skipif(os.name != "nt" or ffmpeg is None, reason="needs Windows (Media Foundation) and ffmpeg")
+def test_making_the_copy_says_how_much_of_the_video_is_done(tmp_path: Path):
+    subprocess.run([ffmpeg, "-v", "error", "-f", "lavfi", "-i", "color=c=0x223344:size=320x180:rate=30:duration=4",
+                    "-f", "lavfi", "-i", "sine=duration=4", "-c:v", "mpeg4", "-c:a", "aac",
+                    str(tmp_path / "recording.mp4")], check=True)
+    done: list[float] = []
+    burn_subtitles(ffmpeg, tmp_path, CALL, NAMES, progress=done.append)
+    assert done and done == sorted(done)  # seconds of the video made so far, as ffmpeg says them
+    assert 3.5 < done[-1] <= 4.1
+
+
 @pytest.mark.skipif(os.name != "nt" or ffmpeg is None or shutil.which("ffprobe") is None,
                     reason="needs Windows (Media Foundation), ffmpeg and ffprobe")
 def test_a_transcribed_video_gets_its_copy_in_cronistas_folder_and_is_left_alone(tmp_path: Path):

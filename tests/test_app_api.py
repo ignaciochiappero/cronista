@@ -64,8 +64,10 @@ def test_the_subtitled_video_is_made_in_the_background_with_the_labels(api, tmp_
     api.rename_label(recording_id, "computer", "Ana")
     made = []
 
-    def fake_burn(ffmpeg, where, segments, names):
+    def fake_burn(ffmpeg, where, segments, names, *, progress):
         made.append((ffmpeg, where, [s.source for s in segments], names))
+        for seconds in (1.5, 2.25, 3.2):  # the call is 3 s long; ffmpeg's last word can go past that
+            progress(seconds)
         (where / "recording-subtitled.mp4").write_bytes(b"video")
         return where / "recording-subtitled.mp4"
 
@@ -76,7 +78,13 @@ def test_the_subtitled_video_is_made_in_the_background_with_the_labels(api, tmp_
     assert api.subtitled_video(recording_id, "en") == {"ok": True}
     assert done.wait(5)
     assert made == [("ffmpeg.exe", folder, ["mic", "computer"], {"mic": "Me", "computer": "Ana"})]
-    assert events[0] == ("subtitling", {"id": recording_id})
+    # How much is done, never all of it before "subtitled", and the seconds left at the pace so far
+    # (none here: the fake is instant).
+    assert [payload for kind, payload in events if kind == "subtitling"] == [
+        {"id": recording_id, "progress": 0.0, "eta": None},
+        {"id": recording_id, "progress": 0.5, "eta": 0},
+        {"id": recording_id, "progress": 0.75, "eta": 0},
+        {"id": recording_id, "progress": 0.99, "eta": 0}]
     assert events[-1] == ("subtitled", {"id": recording_id, "path": str(folder / "recording-subtitled.mp4")})
 
 

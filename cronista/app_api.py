@@ -454,13 +454,25 @@ class Api:
         language = language_or_default(language or self._load_settings().get("language"))
 
         def work() -> None:
-            self._emit("subtitling", {"id": recording_id})
+            self._emit("subtitling", {"id": recording_id, "progress": 0.0, "eta": None})
+            started = time.monotonic()
             try:
                 record = self._library.get(recording_id)
                 segments = _segments(record)
                 names = speakers(segments, {**default_labels(language), **record["labels"]})
                 dropped = {"source": Path(record["video_path"])} if record["kind"] == "video" else {}
-                path = burn_subtitles(self._ffmpeg(), Path(record["folder"]), segments, names, **dropped)
+                length = record["duration_seconds"] or 0.0
+
+                def progress(done: float) -> None:
+                    # Short of all of it until "subtitled": moving the MP4's index to its start comes after
+                    # the last frame. The seconds left are at the pace so far.
+                    if length > 0 and done > 0:
+                        eta = max(round((length - done) * (time.monotonic() - started) / done), 0)
+                        self._emit("subtitling", {"id": recording_id, "progress": round(min(done / length, 0.99), 4),
+                                                  "eta": eta})
+
+                path = burn_subtitles(self._ffmpeg(), Path(record["folder"]), segments, names, progress=progress,
+                                      **dropped)
                 if reveal and IS_WINDOWS:
                     subprocess.Popen(["explorer", "/select,", str(path)])
                 self._emit("subtitled", {"id": recording_id, "path": str(path)})

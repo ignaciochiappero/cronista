@@ -233,6 +233,9 @@
   .title-input:focus { border-color: var(--accent); background: var(--surface-2); }
   .meta { color: var(--text-3); font-size: 12.5px; margin-top: 3px; font-variant-numeric: tabular-nums; }
   .actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 6px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+  /* While the subtitled copy is made, its button fills up as the video is done and says what is left. */
+  #subtitled.working { position: relative; isolation: isolate; overflow: hidden; opacity: 1; color: var(--text); font-variant-numeric: tabular-nums; }
+  #subtitled.working::before { content: ""; position: absolute; inset: 0 auto 0 0; z-index: -1; width: var(--done, 0%); background: var(--accent-soft); transition: width .6s ease; }
   .detail .lines { padding: 8px 0 14px; }
 
   .empty { text-align: center; color: var(--text-2); padding: 56px 24px 40px; }
@@ -498,6 +501,9 @@
                 grape: "Grape", sunset: "Sunset", paper: "Paper", contrast: "High contrast" },
       subtitlesSwitch: "Subtitled copy", subtitlesTitle: "When the recording stops, also make a copy of the video with its subtitles",
       subtitled: "Subtitled video", subtitling: "Subtitling…", revealTitle: "Show the video in its folder", subtitledSaved: "Subtitled video saved next to the video",
+      // As short as the button's own name, so the button stays where it is while it fills up.
+      subtitlingAt: (pct, eta) => `${pct}% · ` + (eta < 60 ? "almost done" : `${Math.round(eta / 60)} min left`),
+      subtitlingTitle: "Making the subtitled video",
       importTitle: "Transcribe a file", importHint: "Drop audio or video, or click", importTip: "Transcribe an audio or video file from this computer",
       dropTitle: "Drop to transcribe", dropBody: "Audio or video, in any format. It's transcribed on this computer.",
       dropFormats: "MP3 · WAV · M4A · OGG · FLAC · MP4 · MKV · MOV · WEBM · and more",
@@ -560,6 +566,9 @@
                 grape: "Uva", sunset: "Atardecer", paper: "Papel", contrast: "Alto contraste" },
       subtitlesSwitch: "Copia subtitulada", subtitlesTitle: "Al detener, hacer también una copia del video con sus subtítulos",
       subtitled: "Video subtitulado", subtitling: "Subtitulando…", revealTitle: "Ver el video en su carpeta", subtitledSaved: "Video subtitulado guardado junto al video",
+      subtitlingAt: (pct, eta) => `${pct} % · ` + (eta < 60 ? "casi listo"
+        : Math.round(eta / 60) === 1 ? "falta 1 min" : `faltan ${Math.round(eta / 60)} min`),
+      subtitlingTitle: "Haciendo el video subtitulado",
       importTitle: "Transcribir un archivo", importHint: "Suelta audio o video, o haz clic", importTip: "Transcribir un audio o video de esta computadora",
       dropTitle: "Suéltalo para transcribirlo", dropBody: "Audio o video, en cualquier formato. Se transcribe en esta computadora.",
       dropFormats: "MP3 · WAV · M4A · OGG · FLAC · MP4 · MKV · MOV · WEBM · y más",
@@ -631,7 +640,7 @@
   const $ = (id) => document.getElementById(id);
   const api = () => window.pywebview.api;
   const ui = { lang: "en", phase: "idle", model: "loading", recorderError: "", selected: null, title: "", startedAt: null, timer: null, count: 0, state: null,
-               customLabels: {}, liveLabels: null, subtitling: new Set(), importing: null, dropReady: false };
+               customLabels: {}, liveLabels: null, subtitling: new Map(), importing: null, dropReady: false };
   // The names the two audio sources have until the user gives them others (language.py says the same).
   const DEFAULT_LABELS = { en: { mic: "Me", computer: "Others" }, es: { mic: "Yo", computer: "Otros" } };
   const currentLabels = () => ({ ...DEFAULT_LABELS[ui.lang], ...ui.customLabels });
@@ -879,9 +888,13 @@
   }
 
   function renderSubtitled() {
-    const busy = ui.subtitling.has(ui.selected);
-    $("subtitled").disabled = busy;
-    $("subtitledText").textContent = busy ? t("subtitling") : t("subtitled");
+    const job = ui.subtitling.get(ui.selected);  // its progress (0 to 1) and seconds left, while it is made
+    $("subtitled").disabled = !!job;
+    $("subtitled").classList.toggle("working", !!job);
+    $("subtitled").style.setProperty("--done", `${job ? job.progress * 100 : 0}%`);
+    $("subtitled").title = job ? t("subtitlingTitle") : "";
+    $("subtitledText").textContent = !job ? t("subtitled")
+      : job.progress > 0 && job.eta != null ? t("subtitlingAt")(Math.floor(job.progress * 100), job.eta) : t("subtitling");
   }
 
   // A label turned into a text box in place: Enter or leaving it saves, Esc puts the old name back.
@@ -920,7 +933,7 @@
         finalizing: () => setPhase("finishing"),
         saved: async (p) => { setPhase("idle"); await refreshList(); await select(p.id); toast(t("saved")); },
         notice: (p) => toast(say(p.message)),
-        subtitling: (p) => { ui.subtitling.add(p.id); renderSubtitled(); },
+        subtitling: (p) => { ui.subtitling.set(p.id, p); renderSubtitled(); },
         subtitled: (p) => {
           ui.subtitling.delete(p.id);
           renderSubtitled();
@@ -1221,7 +1234,7 @@
     $("subtitled").onclick = async () => {
       const id = ui.selected;
       const result = await act(() => api().subtitled_video(id, ui.lang));
-      if (result && result.ok) { ui.subtitling.add(id); renderSubtitled(); }
+      if (result && result.ok && !ui.subtitling.has(id)) { ui.subtitling.set(id, { progress: 0, eta: null }); renderSubtitled(); }
     };
     $("delete").onclick = async () => {
       const file = fromFile(ui.record);  // its transcript goes; the file itself stays where it is

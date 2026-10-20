@@ -1,4 +1,4 @@
-"""Finds ffmpeg/ffprobe.
+"""Finds ffmpeg/ffprobe, and runs ffmpeg saying how far it has got.
 
 `find_ffmpeg` is escriba's backend/app/services/audio.py::_find_ffmpeg: the copy bundled with the
 installed app first, then PATH, then the usual Windows install locations (winget, Scoop, C:\\ffmpeg).
@@ -10,10 +10,39 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
+from collections.abc import Callable
 from pathlib import Path
 
 # A packaged (windowed) app must not flash a console window for every ffmpeg call.
 NO_WINDOW = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
+
+
+def run_with_progress(command: list[str], *, progress: Callable[[float], None],
+                      stopped: Callable[[], bool] = lambda: False, cwd: Path | None = None) -> tuple[int, str]:
+    """Runs an ffmpeg command that has `-progress pipe:1`, telling progress(seconds) how many seconds
+    of its output are made each time ffmpeg reports. Returns ffmpeg's exit code and its error output.
+    ffmpeg is ended when stopped() says so, and when anything here fails, so none is left running."""
+    process = subprocess.Popen(command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                               encoding="utf-8", errors="replace", **NO_WINDOW)
+    errors: list[str] = []
+    reader = threading.Thread(target=lambda: errors.extend(process.stderr), daemon=True)
+    reader.start()
+    try:
+        for line in process.stdout:
+            if stopped():
+                process.kill()
+                break
+            key, _, value = line.strip().partition("=")
+            if key == "out_time_us" and value.isdigit():
+                progress(int(value) / 1e6)
+        process.wait()
+    except BaseException:
+        process.kill()
+        process.wait()
+        raise
+    reader.join(timeout=5)
+    return process.returncode, "".join(errors)
 
 
 def find_ffmpeg() -> str | None:
