@@ -5,16 +5,24 @@ on the Releases page also contains the software below, each under its own licens
 
 ## FFmpeg
 
-The installer bundles `ffmpeg.exe` (FFmpeg 9.0, the "full" static Windows build from
-[gyan.dev](https://www.gyan.dev/ffmpeg/builds/)), licensed under the **GNU General Public License
-version 3**. Cronista runs it as a separate program, to capture the screen and the sound and to
-encode them.
+The installer bundles `ffmpeg.exe` (FFmpeg 9.0, version `n9.0.2-28-g669f5ab083`, the static
+`win64-lgpl` build from [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds)), licensed
+under the **GNU Lesser General Public License version 3** or later. Cronista runs it as a separate
+program, to capture the screen and the sound and to encode them.
 
 - License text: installed next to it, as `_internal\ffmpeg\LICENSE.txt`.
-- Build details (configuration and the libraries it includes): `_internal\ffmpeg\README.txt`.
+- Build details (its version and configuration, as `ffmpeg -version` prints them):
+  `_internal\ffmpeg\BUILD.txt`.
 - Source code: FFmpeg at commit
-  [d32b387f2b](https://github.com/FFmpeg/FFmpeg/commit/d32b387f2b), as stated by the build. The
-  build's own page lists where the sources of its external libraries are.
+  [669f5ab083](https://github.com/FFmpeg/FFmpeg/commit/669f5ab083c7732c10f1ce9e4f1915960dd88457)
+  (branch `release/9.0`). The libraries linked into it come from the repositories and commits
+  named by the build scripts, BtbN/FFmpeg-Builds at commit
+  [63ac3265b0](https://github.com/BtbN/FFmpeg-Builds/tree/63ac3265b0789ea16c7b1f8351cd2ad195a28722)
+  (`scripts.d`). The build is `ffmpeg-n9.0.2-28-g669f5ab083-win64-lgpl-9.0.zip`, from that
+  project's release `autobuild-2026-10-19-13-06`.
+
+The installers published for versions up to 0.4.0 bundled gyan.dev's "full" build of FFmpeg 9.0
+instead, under the GPL version 3; the notices installed with them describe it.
 
 To use another FFmpeg, replace `_internal\ffmpeg\ffmpeg.exe` with a build that has the
 `gfxcapture` filter and the `h264_mf` encoder (Media Foundation), the two Cronista needs.

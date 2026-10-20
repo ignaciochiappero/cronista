@@ -89,7 +89,7 @@ needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="needs 
 def make_parts(folder: Path, *, screen: bool = True, audio: bool = True) -> None:
     if screen:
         subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=30:duration=2",
-                        "-c:v", "libx264", str(folder / "screen.mp4")], check=True)
+                        "-c:v", "mpeg4", str(folder / "screen.mp4")], check=True)  # libx264 is not in LGPL builds
     if audio:
         subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
                         "-c:a", "aac", str(folder / "audio.m4a")], check=True)

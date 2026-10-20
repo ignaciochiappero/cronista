@@ -97,14 +97,15 @@ FFmpeg must be on PATH (`winget install ffmpeg`). The speech model lives in `mod
 
 ```powershell
 .\.venv\Scripts\python.exe tools\make_icon.py                 # only if the logo changed
+$env:FFMPEG_EXE = "C:\path\to\ffmpeg-n9.0-latest-win64-lgpl-9.0\bin\ffmpeg.exe"   # an LGPL build, see below
 .\.venv\Scripts\pyinstaller.exe cronista.spec --noconfirm --clean
 .\dist\Cronista\Cronista.exe --self-test                      # records 5 s with computer sound, checks, deletes; exit code 0 = fine
 & "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\cronista.iss
 ```
 
-PyInstaller puts the app, Python, the model and FFmpeg in `dist\Cronista` (about 975 MB); Inno Setup packs that into `dist\Cronista-Setup-<version>.exe`. The installer installs to `%LOCALAPPDATA%\Programs\Cronista` and adds an uninstaller that keeps the recordings and the history. The packaged app writes its output and errors to `%LOCALAPPDATA%\Cronista\cronista.log`.
+PyInstaller puts the app, Python, the model and FFmpeg in `dist\Cronista` (about 890 MB); Inno Setup packs that into `dist\Cronista-Setup-<version>.exe`. The installer installs to `%LOCALAPPDATA%\Programs\Cronista` and adds an uninstaller that keeps the recordings and the history. The packaged app writes its output and errors to `%LOCALAPPDATA%\Cronista\cronista.log`.
 
-The bundled FFmpeg is the one on PATH, with its license and build details next to it. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+The bundled FFmpeg must be an LGPL build. The spec takes the `ffmpeg.exe` that `FFMPEG_EXE` points to (else the one on PATH), stops if it was configured with `--enable-gpl` or `--enable-nonfree`, and puts the build's `LICENSE.txt` next to it, with its version and configuration in `BUILD.txt`. The installer uses BtbN's static LGPL build of FFmpeg 9.0 (`ffmpeg-n9.0-latest-win64-lgpl-9.0.zip` on the [BtbN/FFmpeg-Builds releases](https://github.com/BtbN/FFmpeg-Builds/releases), unzipped outside the repo). [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) names the exact build and where its source is, so update it when the build changes.
 
 ## Limits
 
@@ -117,4 +118,4 @@ The bundled FFmpeg is the one on PATH, with its license and build details next t
 
 Cronista is open source under the [Apache License 2.0](LICENSE). Copyright 2026 Nacho Chiappero. See [NOTICE](NOTICE).
 
-The installer also contains FFmpeg (GPL v3), the Parakeet TDT speech model by NVIDIA (CC BY 4.0), and Python with the packages listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), each under its own license.
+The installer also contains FFmpeg (LGPL v3), the Parakeet TDT speech model by NVIDIA (CC BY 4.0), and Python with the packages listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), each under its own license.

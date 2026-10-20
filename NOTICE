@@ -19,5 +19,5 @@ ported from bavel, a fork of gemma-translator
 Copyright 2026 Google LLC, licensed under the Apache License, Version 2.0.
 
 The installer also contains third-party software under its own licenses,
-FFmpeg (GPL v3) and the Parakeet TDT speech model (CC BY 4.0) among them.
+FFmpeg (LGPL v3) and the Parakeet TDT speech model (CC BY 4.0) among them.
 See THIRD-PARTY-NOTICES.md.

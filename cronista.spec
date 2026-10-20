@@ -3,16 +3,24 @@
 
 Build:  .venv\\Scripts\\pyinstaller.exe cronista.spec --noconfirm --clean
 Result: dist\\Cronista\\Cronista.exe plus _internal\\ (the app, Python, the model and ffmpeg).
+
+The bundled ffmpeg.exe is the one the FFMPEG_EXE environment variable points to, else the one on
+PATH. It must be an LGPL build, such as BtbN's win64-lgpl (https://github.com/BtbN/FFmpeg-Builds).
 """
 import os
 import shutil
+import subprocess
 
 from PyInstaller.utils.hooks import collect_data_files, copy_metadata
 
 ROOT = os.path.abspath(".")
-FFMPEG_EXE = shutil.which("ffmpeg")
-if not FFMPEG_EXE:
-    raise SystemExit("ffmpeg.exe not found on PATH. Install it with: winget install ffmpeg")
+FFMPEG_EXE = os.environ.get("FFMPEG_EXE") or shutil.which("ffmpeg")
+if not FFMPEG_EXE or not os.path.isfile(FFMPEG_EXE):
+    raise SystemExit("ffmpeg.exe not found. Set FFMPEG_EXE to an LGPL build's bin\\ffmpeg.exe, or put one on PATH.")
+FFMPEG_VERSION = subprocess.run([FFMPEG_EXE, "-hide_banner", "-version"], capture_output=True, text=True, check=True).stdout
+# The installer's notices say LGPL: a build configured with GPL or non-free parts must not slip in.
+if "--enable-gpl" in FFMPEG_VERSION or "--enable-nonfree" in FFMPEG_VERSION:
+    raise SystemExit(f"{FFMPEG_EXE} is a GPL or non-free build. Set FFMPEG_EXE to an LGPL one.")
 MODEL_DIR = os.path.join(ROOT, "models", "parakeet-tdt-0.6b-v3")
 if not os.path.isdir(MODEL_DIR):
     raise SystemExit(f"The speech model is missing: {MODEL_DIR}")
@@ -25,15 +33,17 @@ datas = [
     (os.path.join(ROOT, "NOTICE"), "."),
     (os.path.join(ROOT, "THIRD-PARTY-NOTICES.md"), "."),
 ]
-# FFmpeg's license and build details go with it (GPL v3): the gyan.dev build keeps them one folder up from bin.
-for name, shipped in (("LICENSE", "LICENSE.txt"), ("README.txt", "README.txt")):
-    source = os.path.join(os.path.dirname(os.path.dirname(FFMPEG_EXE)), name)
-    if not os.path.isfile(source):
-        raise SystemExit(f"FFmpeg's {name} is missing next to its bin folder: {source}")
-    shipped_copy = os.path.join(ROOT, "build", "ffmpeg-notices", shipped)
-    os.makedirs(os.path.dirname(shipped_copy), exist_ok=True)
-    shutil.copyfile(source, shipped_copy)
-    datas.append((shipped_copy, "ffmpeg"))
+# FFmpeg's license and build details go with it: BtbN's builds keep LICENSE.txt one folder up from bin
+# and have no README, so the configuration comes from the binary itself (ffmpeg -version).
+FFMPEG_NOTICES = os.path.join(ROOT, "build", "ffmpeg-notices")
+os.makedirs(FFMPEG_NOTICES, exist_ok=True)
+license_source = os.path.join(os.path.dirname(os.path.dirname(FFMPEG_EXE)), "LICENSE.txt")
+if not os.path.isfile(license_source):
+    raise SystemExit(f"FFmpeg's LICENSE.txt is missing next to its bin folder: {license_source}")
+shutil.copyfile(license_source, os.path.join(FFMPEG_NOTICES, "LICENSE.txt"))
+with open(os.path.join(FFMPEG_NOTICES, "BUILD.txt"), "w", encoding="utf-8") as build_details:
+    build_details.write(FFMPEG_VERSION.split("\nExiting with exit code")[0].rstrip() + "\n")
+datas += [(os.path.join(FFMPEG_NOTICES, name), "ffmpeg") for name in ("LICENSE.txt", "BUILD.txt")]
 datas += collect_data_files("onnx_asr")  # the mel preprocessors it loads from package data
 datas += collect_data_files("docx")  # python-docx's default template
 datas += collect_data_files("reportlab")  # its font metrics and fonts; the PDF embeds Segoe UI, but just in case

@@ -90,4 +90,4 @@ Para armar el instalador, sigue los pasos de [Build the installer](README.md#bui
 
 Cronista es de código abierto, bajo la [Licencia Apache 2.0](LICENSE). Copyright 2026 Nacho Chiappero. Ver [NOTICE](NOTICE).
 
-El instalador también incluye FFmpeg (GPL v3), el modelo de voz Parakeet TDT de NVIDIA (CC BY 4.0) y Python con los paquetes que lista [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), cada uno con su propia licencia.
+El instalador también incluye FFmpeg (LGPL v3), el modelo de voz Parakeet TDT de NVIDIA (CC BY 4.0) y Python con los paquetes que lista [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), cada uno con su propia licencia.
