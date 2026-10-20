@@ -10,7 +10,7 @@ Cronista graba tu pantalla principal, tu micrófono y el sonido de tu computador
 
 <picture>
   <source srcset="docs/tour-es.avif" type="image/avif" />
-  <img src="docs/screenshot-es.png" alt="Un recorrido por la app: nombrar la voz de la computadora, toda la pantalla grabándose, la transcripción en vivo diciendo quién habló, el video subtitulado, buscar en el historial, exportar a Word y PDF, y los temas." />
+  <img src="docs/screenshot-es.png" alt="Un recorrido por la app: nombrar la voz de la computadora, toda la pantalla grabándose, la transcripción en vivo diciendo quién habló, el video subtitulado, una entrevista arrastrada a la app y transcrita, buscar en el historial, exportar a Word y PDF, y los temas." />
 </picture>
 
 ![Cronista con una grabación abierta: su transcripción, los controles de grabación y el historial](docs/screenshot-es.png)
@@ -45,11 +45,6 @@ La primera vez, una guía corta te muestra la app. El botón **Guía** la vuelve
 | **Exportar** | **Word** y **PDF** escriben la transcripción con sus marcas de tiempo y quién habló, junto al video. |
 | **Ver** | **Reproducir** abre el video en tu reproductor; **Carpeta** abre su carpeta. |
 | **A tu manera** | Español o inglés, con **EN / ES** arriba. Diez temas en **Tema**: Sistema (claro u oscuro, según Windows), Oscuro, Claro, Medianoche, Océano, Bosque, Uva, Atardecer, Papel y Alto contraste. |
-
-<picture>
-  <source srcset="docs/import-es.avif" type="image/avif" />
-  <img src="docs/import-es.jpg" alt="Transcribir un archivo: una entrevista arrastrada desde una carpeta a Cronista, su transcripción escribiéndose con lo que falta, y el resultado en el historial." />
-</picture>
 
 Cada grabación tiene su carpeta en `Videos\Cronista`:
 

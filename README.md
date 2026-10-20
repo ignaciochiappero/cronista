@@ -10,7 +10,7 @@ Cronista records your main screen, your microphone and the sound of your compute
 
 <picture>
   <source srcset="docs/tour.avif" type="image/avif" />
-  <img src="docs/screenshot.png" alt="A tour of the app: naming the computer's voice, the whole screen being recorded, the live transcript saying who spoke, the subtitled video, searching the history, the Word and PDF export, and the themes." />
+  <img src="docs/screenshot.png" alt="A tour of the app: naming the computer's voice, the whole screen being recorded, the live transcript saying who spoke, the subtitled video, an interview dragged onto it and transcribed, searching the history, the Word and PDF export, and the themes." />
 </picture>
 
 ![Cronista with a recording open: its transcript, the recording controls, and the history](docs/screenshot.png)
@@ -45,11 +45,6 @@ The first time, a short guide shows you around. **Guide** brings it back.
 | **Export it** | **Word** and **PDF** write the transcript with its timestamps and who spoke, next to the video. |
 | **Watch it** | **Play** opens the video in your usual player; **Show in folder** opens its folder. |
 | **Your way** | English or Spanish, with **EN / ES** at the top. Ten themes in **Theme**: System (light or dark, as Windows is), Dark, Light, Midnight, Ocean, Forest, Grape, Sunset, Paper and High contrast. |
-
-<picture>
-  <source srcset="docs/import.avif" type="image/avif" />
-  <img src="docs/import.jpg" alt="Transcribing a file: an interview dragged from a folder onto Cronista, its transcript written as it goes with how long is left, and the result in the history." />
-</picture>
 
 Each recording has its own folder in `Videos\Cronista`:
 
