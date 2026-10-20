@@ -56,3 +56,29 @@ def test_writes_srt_and_plain_text(tmp_path):
     srt, txt = write_text_files(SEGMENTS, tmp_path)
     assert srt.read_text(encoding="utf-8").startswith("1\n00:00:00,000 --> 00:00:02,500\nHola.\n")
     assert txt.read_text(encoding="utf-8") == "Hola.\nSecond part.\n"
+
+
+CALL = [TranscriptionSegment(0.0, 2.0, "Let's start.", "mic"),
+        TranscriptionSegment(2.5, 4.0, "Sure, the screens are ready.", "computer"),
+        TranscriptionSegment(4.2, 5.0, "Show them.", "computer"),
+        TranscriptionSegment(6.0, 7.0, "Great.", "mic")]
+NAMES = {"mic": "Me", "computer": "Ana"}
+
+
+def test_with_two_sources_every_file_says_who_said_what(tmp_path):
+    srt, txt = write_text_files(CALL, tmp_path, NAMES)
+    assert "Ana: Sure, the screens are ready." in srt.read_text(encoding="utf-8")
+    assert txt.read_text(encoding="utf-8").splitlines() == [
+        "Me: Let's start.", "Ana: Sure, the screens are ready.", "Ana: Show them.", "Me: Great."]
+
+    path = write_word(CALL, tmp_path / "transcript.docx", title="Call", recorded_at=RECORDED, names=NAMES)
+    paragraphs = [p.text for p in Document(str(path)).paragraphs]
+    # The reading part goes by turns: one paragraph each time the speaker changes.
+    assert "Ana: Sure, the screens are ready. Show them." in paragraphs
+    assert "Me: Great." in paragraphs
+    assert "[00:00:02 → 00:00:04] Ana: Sure, the screens are ready." in paragraphs
+
+    texts = [flowable.getPlainText() for flowable in pdf_story(CALL, title="Call", recorded_at=RECORDED, names=NAMES)
+             if hasattr(flowable, "getPlainText")]
+    assert "Ana: Sure, the screens are ready. Show them." in texts
+    assert "[00:00:02 → 00:00:04] Ana: Sure, the screens are ready." in texts

@@ -20,10 +20,12 @@ from .engine.recorders import QUALITY, RecorderSettings, default_recorder, pick_
 from .engine.session import RecordingSession
 from .engine.stt_engine import load_parakeet
 from .engine.transcript import TranscriptionSegment
+from .engine.voices import SOURCES, line, speakers
 from .export import write_pdf, write_text_files, write_word
-from .language import default_title, language_or_default
+from .language import default_labels, default_title, language_or_default
 from .library import Library
 from .paths import IS_WINDOWS, data_dir, recordings_dir
+from .subtitles import burn_subtitles
 
 
 class Api:
@@ -37,6 +39,9 @@ class Api:
         self._recorder_error = ""
         self._session: RecordingSession | None = None
         self._language = "en"  # the page's, when the recording started: its title's language
+        self._labels: dict[str, str] = {}  # the audio sources' names for the recording that runs
+        self._subtitles = False  # whether that recording gets a subtitled copy of its video
+        self._subtitling: set[str] = set()  # recordings whose subtitled copy is being made
         self._phase = "idle"  # idle, listening, recording, finishing
         self._lock = threading.Lock()
         self._close_when_saved = False
@@ -88,13 +93,20 @@ class Api:
         self._settings_path.parent.mkdir(parents=True, exist_ok=True)
         self._settings_path.write_text(json.dumps(settings), encoding="utf-8")
 
-    def save_preferences(self, language: str | None = None, tour_seen: bool | None = None) -> dict:
-        """The page's own preferences: its language ("en" or "es") and whether the tour was seen."""
+    def save_preferences(self, language: str | None = None, tour_seen: bool | None = None,
+                         labels: dict | None = None, subtitles: bool | None = None) -> dict:
+        """The page's own preferences: its language ("en" or "es"), whether the tour was seen, the names
+        the user gave the audio sources (an empty one goes back to the default), and whether recordings
+        get a subtitled copy of their video."""
         changes = {}
         if language in ("en", "es"):
             changes["language"] = language
         if tour_seen is not None:
             changes["tour_seen"] = bool(tour_seen)
+        if labels is not None:
+            changes["labels"] = _clean_labels(labels)
+        if subtitles is not None:
+            changes["subtitles"] = bool(subtitles)
         if changes:
             self._save_settings(**changes)
         return {"ok": True}
@@ -122,14 +134,17 @@ class Api:
                          "quality": settings.get("quality", "balanced"),
                          "system_audio": bool(settings.get("system_audio", True)),
                          "language": settings.get("language"),  # None: the page follows the system's
-                         "tour_seen": bool(settings.get("tour_seen", False))},
+                         "tour_seen": bool(settings.get("tour_seen", False)),
+                         "labels": _clean_labels(settings.get("labels") or {}),  # only the ones the user named
+                         "subtitles": bool(settings.get("subtitles", False))},
             "recordings_dir": str(recordings_dir()),
         }
 
     # --- recording ----------------------------------------------------------------------------
     def start(self, microphone: str | None, quality: str, system_audio: bool = True,
-              language: str | None = None) -> dict:
-        """microphone: a device id from state()["microphones"]; language: the page's, "en" or "es"."""
+              language: str | None = None, labels: dict | None = None, subtitles: bool | None = None) -> dict:
+        """microphone: a device id from state()["microphones"]; language: the page's, "en" or "es";
+        labels: the audio sources' names for this recording; subtitles: make a subtitled copy of it."""
         with self._lock:
             if self._phase != "idle":
                 return {"error": "A recording is already running."}
@@ -150,6 +165,8 @@ class Api:
                 return {"error": str(error)}
             self._session = session
             self._language = language_or_default(language or self._load_settings().get("language"))
+            self._labels = {**default_labels(self._language), **_clean_labels(labels or {})}
+            self._subtitles = bool(subtitles)
             self._phase = "listening"
         return {"ok": True}
 
@@ -176,7 +193,7 @@ class Api:
         session = self._session
         try:
             result = session.stop()
-            write_text_files(result.segments, Path(result.folder))
+            write_text_files(result.segments, Path(result.folder), speakers(result.segments, self._labels))
             started = datetime.fromisoformat(result.started_at)
             recording_id = self._library.add(
                 title=default_title(started, self._language),
@@ -186,9 +203,13 @@ class Api:
                 folder=result.folder,
                 video_path=result.video_path,
                 transcript=result.transcript,
-                segments=[{"start": s.start, "end": s.end, "text": s.text} for s in result.segments],
+                segments=[{"start": s.start, "end": s.end, "text": s.text, "source": s.source}
+                          for s in result.segments],
+                labels=self._labels,
             )
             self._emit("saved", {"id": recording_id})
+            if self._subtitles and Path(result.video_path).exists():
+                self._subtitle(recording_id, self._language, reveal=False)
         except Exception as error:  # noqa: BLE001
             traceback.print_exc()
             self._emit("error", {"message": f"Saving the recording failed: {error}"})
@@ -213,6 +234,60 @@ class Api:
 
     def recording(self, recording_id: str) -> dict | None:
         return self._library.get(recording_id)
+
+    def rename_label(self, recording_id: str, source: str, label: str) -> dict:
+        """Names an audio source of one recording ("computer" -> "Ana"), there and in its SRT and TXT."""
+        record = self._library.get(recording_id)
+        if not record or source not in SOURCES:
+            return {"error": "Recording not found."}
+        label = " ".join(label.split())[:40]
+        if not label:
+            return {"error": "Enter a label."}
+        self._library.set_label(recording_id, source, label)
+        record = self._library.get(recording_id)
+        segments = _segments(record)
+        if Path(record["folder"]).is_dir():
+            write_text_files(segments, Path(record["folder"]), speakers(segments, record["labels"]))
+        return {"ok": True, "labels": record["labels"]}
+
+    def subtitled_video(self, recording_id: str, language: str | None = None) -> dict:
+        """Starts making recording-subtitled.mp4; "subtitled" (or "error") says when it is done."""
+        record = self._library.get(recording_id)
+        if not record:
+            return {"error": "Recording not found."}
+        if self._recorder is None or not getattr(self._recorder, "ffmpeg", None):
+            return {"error": self._recorder_error or "ffmpeg was not found. Install it with: winget install ffmpeg"}
+        if not Path(record["video_path"]).exists():
+            return {"error": "The video file is no longer there."}
+        self._subtitle(recording_id, language, reveal=True)
+        return {"ok": True}
+
+    def _subtitle(self, recording_id: str, language: str | None, *, reveal: bool) -> None:
+        """Makes the subtitled copy in a thread of its own: it re-encodes the whole video."""
+        with self._lock:
+            if recording_id in self._subtitling:
+                return
+            self._subtitling.add(recording_id)
+        language = language_or_default(language or self._load_settings().get("language"))
+
+        def work() -> None:
+            self._emit("subtitling", {"id": recording_id})
+            try:
+                record = self._library.get(recording_id)
+                segments = _segments(record)
+                names = speakers(segments, {**default_labels(language), **record["labels"]})
+                path = burn_subtitles(self._recorder.ffmpeg, Path(record["folder"]), segments, names)
+                if reveal and IS_WINDOWS:
+                    subprocess.Popen(["explorer", "/select,", str(path)])
+                self._emit("subtitled", {"id": recording_id, "path": str(path)})
+            except Exception as error:  # noqa: BLE001 - shown to the user, details in the log
+                traceback.print_exc()
+                self._emit("error", {"message": str(error), "id": recording_id})
+            finally:
+                with self._lock:
+                    self._subtitling.discard(recording_id)
+
+        threading.Thread(target=work, daemon=True).start()
 
     def rename(self, recording_id: str, title: str) -> dict:
         title = title.strip()
@@ -248,7 +323,9 @@ class Api:
         record = self._library.get(recording_id)
         if not record:
             return {"error": "Recording not found."}
-        text = "\n".join(segment["text"] for segment in record["segments"])
+        segments = _segments(record)
+        names = speakers(segments, {**default_labels(self._load_settings().get("language")), **record["labels"]})
+        text = "\n".join(line(segment, names) for segment in segments)
         if IS_WINDOWS:
             # clip.exe reads UTF-16 with a byte-order mark as Unicode.
             subprocess.run(["clip"], input=("﻿" + text).encode("utf-16-le"), check=False,
@@ -267,11 +344,12 @@ class Api:
         record = self._library.get(recording_id)
         if not record:
             return {"error": "Recording not found."}
-        segments = [TranscriptionSegment(s["start"], s["end"], s["text"]) for s in record["segments"]]
+        segments = _segments(record)
+        language = language_or_default(language or self._load_settings().get("language"))
+        names = speakers(segments, {**default_labels(language), **record["labels"]})
         try:
             path = write(segments, Path(record["folder"]) / file_name, title=record["title"],
-                         recorded_at=datetime.fromisoformat(record["created_at"]),
-                         language=language_or_default(language or self._load_settings().get("language")))
+                         recorded_at=datetime.fromisoformat(record["created_at"]), language=language, names=names)
         except PermissionError:
             return {"error": f"{file_name} is open in another program. Close it and try again."}
         if IS_WINDOWS:
@@ -298,3 +376,17 @@ class Api:
             subprocess.Popen(["open", path])
         else:
             subprocess.Popen(["xdg-open", path])
+
+
+def _clean_labels(labels: dict) -> dict[str, str]:
+    """The names the user gave the audio sources: known sources only, trimmed, at most 40 characters."""
+    clean = {}
+    for source in SOURCES:
+        label = " ".join(str(labels.get(source) or "").split())[:40]
+        if label:
+            clean[source] = label
+    return clean
+
+
+def _segments(record: dict) -> list[TranscriptionSegment]:
+    return [TranscriptionSegment(s["start"], s["end"], s["text"], s.get("source")) for s in record["segments"]]

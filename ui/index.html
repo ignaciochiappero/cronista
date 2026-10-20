@@ -14,6 +14,7 @@
     --text: #ececef; --text-2: #a3a4ad; --text-3: #6e6f79;
     --accent: #ff5a4e; --accent-2: #f23b4c; --accent-soft: rgba(255, 90, 78, 0.12); --accent-text: #ff8a7f;
     --ok: #3ddc97; --warn: #f5b74f;
+    --mic: #ff8a7f; --mic-bg: rgba(255, 90, 78, 0.13); --computer: #8ab4ff; --computer-bg: rgba(110, 160, 255, 0.14);
     --mark: rgba(255, 200, 87, 0.28);
     --shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 10px 30px rgba(0, 0, 0, 0.35);
     --radius: 10px; --radius-lg: 14px;
@@ -28,6 +29,7 @@
       --border: rgba(12, 13, 18, 0.08); --border-strong: rgba(12, 13, 18, 0.14);
       --text: #111216; --text-2: #575864; --text-3: #8b8c96;
       --accent-soft: rgba(242, 59, 76, 0.09); --accent-text: #d8323f;
+      --mic: #d8323f; --mic-bg: rgba(242, 59, 76, 0.09); --computer: #2f63c9; --computer-bg: rgba(47, 99, 201, 0.09);
       --mark: rgba(255, 196, 0, 0.32);
       --shadow: 0 1px 2px rgba(12, 13, 18, 0.04), 0 8px 24px rgba(12, 13, 18, 0.06);
     }
@@ -132,7 +134,25 @@
   .line .at { font: 12px/22px var(--mono); color: var(--text-3); font-variant-numeric: tabular-nums; }
   .line .text { line-height: 22px; }
   #live .lines { padding-bottom: 0; }
-  .partial { color: var(--text-3); font-style: italic; line-height: 22px; min-height: 43px; padding: 5px 18px 16px 86px; }
+  .partials { min-height: 43px; padding: 0 18px 16px 86px; }
+  .partial { color: var(--text-3); font-style: italic; line-height: 22px; padding-top: 5px; }
+
+  /* Who said it: the microphone's label in the page's red, the computer's sound in blue. */
+  .voices { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; color: var(--text-3); }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 9px; border-radius: 999px; font-size: 12.5px; font-weight: 600; border: 1px solid transparent; }
+  .chip i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+  .chip .icon { width: 12px; height: 12px; opacity: .65; }
+  .chip input { width: 10ch; border: 0; padding: 0; border-radius: 0; background: transparent; color: inherit; font: inherit; }
+  .chip.mic, .who.mic { color: var(--mic); background: var(--mic-bg); }
+  .chip.computer, .who.computer { color: var(--computer); background: var(--computer-bg); }
+  .chip.mic:hover:not(:disabled) { background: var(--mic-bg); border-color: currentColor; }
+  .chip.computer:hover:not(:disabled) { background: var(--computer-bg); border-color: currentColor; }
+  .chip:focus-within { border-color: currentColor; }
+  .who { display: inline-block; margin-right: 8px; padding: 0 7px; border-radius: 6px; font: 600 12px/20px var(--font); font-style: normal; vertical-align: 1px; }
+  #transcript .who { cursor: pointer; }
+  #transcript .who:hover { box-shadow: 0 0 0 1px currentColor inset; }
+  .who input { width: 10ch; border: 0; padding: 0; border-radius: 0; background: transparent; color: inherit; font: inherit; }
+  .switch.small { padding: 4px 10px 4px 6px; font-size: 13px; }
   @keyframes rise { from { opacity: 0; transform: translateY(3px); } }
 
   .detail { padding: 18px 20px 6px; }
@@ -192,6 +212,7 @@
     <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/></symbol>
     <symbol id="i-word" viewBox="0 0 24 24"><path d="M14 3.5H7A1.5 1.5 0 0 0 5.5 5v14A1.5 1.5 0 0 0 7 20.5h10a1.5 1.5 0 0 0 1.5-1.5V8z"/><path d="M14 3.5V8h4.5"/><path d="m8.5 11.5 1.2 5 1.8-3.6 1.8 3.6 1.2-5"/></symbol>
     <symbol id="i-pdf" viewBox="0 0 24 24"><path d="M14 3.5H7A1.5 1.5 0 0 0 5.5 5v14A1.5 1.5 0 0 0 7 20.5h10a1.5 1.5 0 0 0 1.5-1.5V8z"/><path d="M14 3.5V8h4.5"/><path d="M12 11v5.5m0 0-2.2-2.2m2.2 2.2 2.2-2.2"/></symbol>
+    <symbol id="i-captions" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M7.5 14.5h4M13.5 14.5h3M7.5 11h2.5M12 11h4.5"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V5.2A.7.7 0 0 1 10.2 4.5h3.6a.7.7 0 0 1 .7.7V7M6.5 7l.9 11.6A1.5 1.5 0 0 0 8.9 20h6.2a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/></symbol>
     <symbol id="i-pencil" viewBox="0 0 24 24"><path d="m14.5 6 3.5 3.5M5 19l1-4.2L15.8 5a1.4 1.4 0 0 1 2 0l1.2 1.2a1.4 1.4 0 0 1 0 2L9.2 18z"/></symbol>
     <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9.7 9.6a2.4 2.4 0 0 1 4.6 1c0 1.6-2.3 2-2.3 3.4"/><path d="M12 17h.01"/></symbol>
@@ -231,6 +252,15 @@
               <input type="checkbox" id="systemAudio" checked><span class="track"></span><span data-i18n="computer"></span>
             </label>
           </div>
+          <div class="voices" data-tour="voices">
+            <span data-i18n="voices"></span>
+            <button class="chip mic" data-source="mic" data-i18n-title="labelTip"><i></i><span class="name"></span><svg class="icon"><use href="#i-pencil"/></svg></button>
+            <button class="chip computer" data-source="computer" data-i18n-title="labelTip"><i></i><span class="name"></span><svg class="icon"><use href="#i-pencil"/></svg></button>
+            <span class="spacer"></span>
+            <label class="switch small" id="subtitlesOption" data-tour="subtitles" data-i18n-title="subtitlesTitle">
+              <input type="checkbox" id="subtitles"><span class="track"></span><span data-i18n="subtitlesSwitch"></span>
+            </label>
+          </div>
           <div class="stage">
             <button class="record" id="record" data-tour="record"><span class="dot"></span></button>
             <div>
@@ -242,22 +272,22 @@
         <section class="card" id="live" data-tour="live" hidden>
           <div class="card-head"><span class="live-dot"></span><h2 data-i18n="live"></h2></div>
           <div class="lines" id="phrases"></div>
-          <div class="partial" id="partial"></div>
+          <div class="partials" id="partials"></div>
         </section>
         <section class="card detail" id="detail" data-tour="detail" hidden>
           <div class="title-row">
             <input class="title-input" id="title" data-i18n-aria="titleLabel" data-i18n-title="titleTip">
             <button class="ghost" id="rename"><svg class="icon"><use href="#i-pencil"/></svg><span data-i18n="rename"></span></button>
+            <button id="delete" class="ghost danger"><svg class="icon"><use href="#i-trash"/></svg><span data-i18n="delete"></span></button>
           </div>
           <div class="meta" id="meta"></div>
           <div class="actions" data-tour="exports">
             <button id="play"><svg class="icon"><use href="#i-play"/></svg><span data-i18n="play"></span></button>
-            <button id="reveal"><svg class="icon"><use href="#i-folder"/></svg><span data-i18n="reveal"></span></button>
+            <button id="reveal" data-i18n-title="revealTitle"><svg class="icon"><use href="#i-folder"/></svg><span data-i18n="reveal"></span></button>
             <button id="copy"><svg class="icon"><use href="#i-copy"/></svg><span data-i18n="copy"></span></button>
             <button id="word"><svg class="icon"><use href="#i-word"/></svg><span data-i18n="word"></span></button>
             <button id="pdf"><svg class="icon"><use href="#i-pdf"/></svg><span data-i18n="pdf"></span></button>
-            <span class="spacer"></span>
-            <button id="delete" class="ghost danger"><svg class="icon"><use href="#i-trash"/></svg><span data-i18n="delete"></span></button>
+            <button id="subtitled"><svg class="icon"><use href="#i-captions"/></svg><span id="subtitledText" data-i18n="subtitled"></span></button>
           </div>
           <div class="lines" id="transcript"></div>
         </section>
@@ -310,20 +340,25 @@
       confirmDelete: "Delete this recording, its video and its transcripts? This can't be undone.",
       count: (n) => n === 1 ? "1 recording" : `${n} recordings`,
       found: (n) => n === 1 ? "1 match" : `${n} matches`,
+      voices: "Labels", labelTip: "Click to name this voice", labelRenamed: "Label renamed",
+      subtitlesSwitch: "Subtitled copy", subtitlesTitle: "When the recording stops, also make a copy of the video with its subtitles",
+      subtitled: "Subtitled video", subtitling: "Subtitling…", revealTitle: "Show the video in its folder", subtitledSaved: "Subtitled video saved next to the video",
       back: "Back", next: "Next", done: "Done", skip: "Skip tour", of: "of",
       tour: [
         { title: "Welcome to Cronista", body: "It records your screen and writes down what is said, live, on this computer. Nothing leaves it." },
         { target: "mic", title: "Your microphone", body: "Choose the microphone to record. Cronista remembers it for next time." },
         { target: "computer", title: "The computer's sound", body: "On: what plays on the computer, a call or a video, is recorded and transcribed too. With speakers, headphones avoid an echo." },
+        { target: "voices", title: "Who said what", body: "Your microphone and the computer's sound are transcribed apart, so every line says who said it. Click a label to name it. Subtitled copy also makes the video with subtitles." },
         { target: "quality", title: "Video quality", body: "Balanced is the best trade-off. Best quality keeps every detail; Smallest files saves space. Your graphics card does the encoding." },
         { target: "record", title: "Record", body: "Press to start and again to stop. Cronista records your whole main screen, at its own resolution." },
         { target: "live", preview: "live", title: "Live transcript", body: "What is said shows up as you speak, in Spanish or English. When you stop, a final pass writes the transcript that gets saved." },
         { target: "history", title: "History and search", body: "Every recording, newest first. Search finds a recording by anything that was said in it." },
         { target: "detail", preview: "detail", title: "Each recording", body: "Click the title to rename it. Play the video, open its folder, or copy the text." },
-        { target: "exports", preview: "detail", title: "Word and PDF", body: "Export the transcript with its timestamps. The file is saved next to the video." },
+        { target: "exports", preview: "detail", title: "Word, PDF and subtitles", body: "Export the transcript with its timestamps, or make a copy of the video with subtitles. The files are saved next to the video." },
         { target: "language", title: "Your language", body: "Switch between English and Spanish here. The Guide button brings this tour back." },
       ],
       sample: ["Hi everyone, let's go over the plan for this week.", "First, the release: it goes out on Thursday."],
+      sampleSources: ["mic", "computer"],
       sampleTitle: "Weekly planning", errors: {},
     },
     es: {
@@ -331,7 +366,7 @@
       search: "Buscar lo que se dijo", history: "Historial", micTitle: "Micrófono", qualityTitle: "Calidad del video",
       computer: "Sonido de la PC", computerTitle: "Grabar también lo que suena en la computadora: videos, llamadas, música",
       live: "Transcripción en vivo", titleLabel: "Título de la grabación", titleTip: "Haz clic para renombrar. Enter guarda, Esc cancela.",
-      rename: "Renombrar", play: "Reproducir", reveal: "Ver en la carpeta", copy: "Copiar texto", word: "Word", pdf: "PDF", delete: "Eliminar",
+      rename: "Renombrar", play: "Reproducir", reveal: "Carpeta", copy: "Copiar texto", word: "Word", pdf: "PDF", delete: "Eliminar",
       emptyTitle: "Pulsa grabar para empezar", emptyBody: "Lo que digas aparece en vivo. Al detener, la transcripción final se guarda junto al video.",
       loading: "Cargando el modelo de voz…", modelError: "Error del modelo de voz", cannotRecord: "No se puede grabar",
       ready: "Listo", starting: "Iniciando…", recording: "Grabando", finishing: "Escribiendo la transcripción…",
@@ -347,20 +382,25 @@
       confirmDelete: "¿Eliminar esta grabación, su video y sus transcripciones? No se puede deshacer.",
       count: (n) => n === 1 ? "1 grabación" : `${n} grabaciones`,
       found: (n) => n === 1 ? "1 resultado" : `${n} resultados`,
+      voices: "Etiquetas", labelTip: "Haz clic para ponerle nombre a esta voz", labelRenamed: "Etiqueta cambiada",
+      subtitlesSwitch: "Copia subtitulada", subtitlesTitle: "Al detener, hacer también una copia del video con sus subtítulos",
+      subtitled: "Video subtitulado", subtitling: "Subtitulando…", revealTitle: "Ver el video en su carpeta", subtitledSaved: "Video subtitulado guardado junto al video",
       back: "Atrás", next: "Siguiente", done: "Listo", skip: "Saltar guía", of: "de",
       tour: [
         { title: "Te damos la bienvenida a Cronista", body: "Graba tu pantalla y escribe lo que se dice, en vivo y en esta computadora. Nada sale de ella." },
         { target: "mic", title: "Tu micrófono", body: "Elige el micrófono para grabar. Cronista lo recuerda para la próxima vez." },
         { target: "computer", title: "El sonido de la computadora", body: "Activado: lo que suena en la computadora, una llamada o un video, también se graba y se transcribe. Con altavoces, usar auriculares evita el eco." },
+        { target: "voices", title: "Quién dijo qué", body: "Tu micrófono y el sonido de la computadora se transcriben por separado, así cada línea dice quién habló. Haz clic en una etiqueta para ponerle nombre. Copia subtitulada hace además el video con subtítulos." },
         { target: "quality", title: "Calidad del video", body: "Equilibrada es la mejor relación. Máxima calidad conserva cada detalle; Archivos más pequeños ahorra espacio. La tarjeta gráfica se encarga de la codificación." },
         { target: "record", title: "Grabar", body: "Pulsa para empezar y otra vez para detener. Cronista graba toda tu pantalla principal, en su resolución." },
         { target: "live", preview: "live", title: "Transcripción en vivo", body: "Lo que se dice aparece mientras hablas, en español o en inglés. Al detener, una pasada final escribe la transcripción que se guarda." },
         { target: "history", title: "Historial y búsqueda", body: "Todas tus grabaciones, de la más nueva a la más vieja. El buscador encuentra una grabación por cualquier cosa que se dijo en ella." },
         { target: "detail", preview: "detail", title: "Cada grabación", body: "Haz clic en el título para renombrarla. Reproduce el video, abre su carpeta o copia el texto." },
-        { target: "exports", preview: "detail", title: "Word y PDF", body: "Exporta la transcripción con sus marcas de tiempo. El archivo se guarda junto al video." },
+        { target: "exports", preview: "detail", title: "Word, PDF y subtítulos", body: "Exporta la transcripción con sus marcas de tiempo, o haz una copia del video con subtítulos. Los archivos se guardan junto al video." },
         { target: "language", title: "Tu idioma", body: "Cambia entre inglés y español desde aquí. El botón Guía vuelve a abrir este recorrido." },
       ],
       sample: ["Hola a todos, repasemos el plan de esta semana.", "Primero, el lanzamiento: sale el jueves."],
+      sampleSources: ["mic", "computer"],
       sampleTitle: "Planificación semanal",
       // What the app says from Python, which writes it in English, in Spanish.
       errors: {
@@ -380,6 +420,8 @@
         "The microphone can't be recorded:": "No se puede grabar el micrófono:",
         "The computer's sound can't be recorded:": "No se puede grabar el sonido de la computadora:",
         "Putting the screen and the sound together failed:": "No se pudieron unir la pantalla y el sonido:",
+        "Enter a label.": "Escribe una etiqueta.",
+        "Making the subtitled video failed:": "No se pudo hacer el video subtitulado:",
       },
       patterns: [[/^(.+) is open in another program\. Close it and try again\.$/, "$1 está abierto en otro programa. Ciérralo y vuelve a intentarlo."]],
     },
@@ -387,7 +429,11 @@
 
   const $ = (id) => document.getElementById(id);
   const api = () => window.pywebview.api;
-  const ui = { lang: "en", phase: "idle", model: "loading", recorderError: "", selected: null, title: "", startedAt: null, timer: null, count: 0, state: null };
+  const ui = { lang: "en", phase: "idle", model: "loading", recorderError: "", selected: null, title: "", startedAt: null, timer: null, count: 0, state: null,
+               customLabels: {}, liveLabels: null, subtitling: new Set() };
+  // The names the two audio sources have until the user gives them others (language.py says the same).
+  const DEFAULT_LABELS = { en: { mic: "Me", computer: "Others" }, es: { mic: "Yo", computer: "Otros" } };
+  const currentLabels = () => ({ ...DEFAULT_LABELS[ui.lang], ...ui.customLabels });
   const t = (key) => STRINGS[ui.lang][key] ?? STRINGS.en[key] ?? key;
   // Python's messages are English; known ones, or known beginnings, are said in the page's language.
   const say = (message) => {
@@ -411,7 +457,12 @@
   };
   const megabytes = (bytes) => `${(bytes / 1e6).toFixed(bytes < 1e7 ? 1 : 0)} MB`;
   const when = (iso) => new Date(iso).toLocaleString(ui.lang, { dateStyle: "medium", timeStyle: "short" });
-  const lineHtml = (start, text) => `<div class="line"><span class="at">${clock(start)}</span><span class="text">${escapeHtml(text)}</span></div>`;
+  const whoHtml = (source, names) => (names && names[source] ? `<span class="who ${source}" data-source="${source}">${escapeHtml(names[source])}</span>` : "");
+  const lineHtml = (start, text, source = null, names = null) =>
+    `<div class="line"><span class="at">${clock(start)}</span><span class="text">${whoHtml(source, names)}${escapeHtml(text)}</span></div>`;
+  // A recording's labels, when two sources spoke in it: with one, there is nobody to tell apart.
+  const namesOf = (record) => (new Set(record.segments.map((s) => s.source).filter(Boolean)).size > 1
+    ? { ...DEFAULT_LABELS[ui.lang], ...(record.labels || {}) } : null);
 
   function toast(message, isError = false) {
     const el = $("toast");
@@ -432,6 +483,7 @@
     $("langEn").setAttribute("aria-pressed", String(ui.lang === "en"));
     $("langEs").setAttribute("aria-pressed", String(ui.lang === "es"));
     if (ui.state) fillControls(ui.state);
+    showChips();
     render();
   }
 
@@ -454,8 +506,11 @@
     record.disabled = ui.phase === "finishing" || (!busy && (ui.model !== "ready" || !!ui.recorderError));
     record.setAttribute("aria-label", busy ? t("stopRecording") : t("startRecording"));
     record.title = record.getAttribute("aria-label");
-    $("mic").disabled = $("quality").disabled = $("systemAudio").disabled = busy;
+    $("mic").disabled = $("quality").disabled = $("systemAudio").disabled = $("subtitles").disabled = busy;
     const withComputer = !$("systemAudioOption").hidden && $("systemAudio").checked;
+    document.querySelectorAll(".voices .chip").forEach((chip) => { chip.disabled = busy; });
+    document.querySelector('.chip[data-source="computer"]').hidden = !withComputer;
+    renderSubtitled();
     $("hint").textContent = {
       idle: withComputer ? t("hintIdleComputer") : t("hintIdle"),
       listening: t("hintStarting"), recording: t("hintRecording"), finishing: t("hintFinishing"),
@@ -477,10 +532,61 @@
     render();
   }
 
-  function addPhrase(start, text) {
-    $("phrases").insertAdjacentHTML("beforeend", lineHtml(start, text));
-    $("partial").textContent = "";
+  function addPhrase(start, text, source) {
+    $("phrases").insertAdjacentHTML("beforeend", lineHtml(start, text, source, ui.liveLabels));
+    showPartial(source, "", "");
     $("phrases").lastElementChild.scrollIntoView({ block: "nearest" });
+  }
+
+  // The words still coming, one line per source that is talking.
+  function showPartial(source, committed, pending) {
+    let row = $("partials").querySelector(`[data-source="${source || "mic"}"]`);
+    if (!committed && !pending) { if (row) row.remove(); return; }
+    if (!row) {
+      row = document.createElement("div");
+      row.className = "partial";
+      row.dataset.source = source || "mic";
+      $("partials").appendChild(row);
+    }
+    row.innerHTML = `${whoHtml(source, ui.liveLabels)}${escapeHtml(committed)} <span style="opacity:.6">${escapeHtml(pending)}</span>`;
+  }
+
+  function showChips() {
+    const labels = currentLabels();
+    document.querySelectorAll(".voices .chip").forEach((chip) => {
+      if (!chip.querySelector("input")) chip.querySelector(".name").textContent = labels[chip.dataset.source];
+    });
+  }
+
+  function renderSubtitled() {
+    const busy = ui.subtitling.has(ui.selected);
+    $("subtitled").disabled = busy;
+    $("subtitledText").textContent = busy ? t("subtitling") : t("subtitled");
+  }
+
+  // A label turned into a text box in place: Enter or leaving it saves, Esc puts the old name back.
+  function editInPlace(holder, value, save) {
+    if (holder.querySelector("input")) return;
+    const name = holder.querySelector(".name") || holder;
+    const input = document.createElement("input");
+    input.value = value;
+    input.maxLength = 40;
+    name.replaceChildren(input);
+    input.focus();
+    input.select();
+    let done = false;
+    const finish = (keep) => {
+      if (done) return;
+      done = true;
+      save(keep ? input.value.trim() : null);
+    };
+    input.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      if (e.key === "Enter") finish(true);
+      if (e.key === "Escape") finish(false);
+    });
+    input.addEventListener("click", (e) => e.stopPropagation());
+    input.addEventListener("blur", () => finish(true));
   }
 
   window.cronista = {
@@ -489,12 +595,17 @@
         model: (p) => { ui.model = p.state; if (p.state === "error") showBanner(say(p.message)); render(); },
         listening: () => setPhase("listening"),
         recording: (p) => { ui.startedAt = p.started_at; setPhase("recording"); },
-        partial: (p) => { $("partial").innerHTML = `${escapeHtml(p.committed)} <span style="opacity:.6">${escapeHtml(p.pending)}</span>`; },
-        phrase: (p) => addPhrase(p.start, p.text),
+        partial: (p) => showPartial(p.source, p.committed, p.pending),
+        phrase: (p) => addPhrase(p.start, p.text, p.source),
         finalizing: () => setPhase("finishing"),
         saved: async (p) => { setPhase("idle"); await refreshList(); await select(p.id); toast(t("saved")); },
         notice: (p) => toast(say(p.message)),
-        error: (p) => { toast(say(p.message), true); setPhase("idle"); },
+        subtitling: (p) => { ui.subtitling.add(p.id); renderSubtitled(); },
+        subtitled: (p) => { ui.subtitling.delete(p.id); renderSubtitled(); toast(t("subtitledSaved")); },
+        error: (p) => {
+          toast(say(p.message), true);
+          if (p.id) { ui.subtitling.delete(p.id); renderSubtitled(); } else setPhase("idle");  // a subtitled copy's error stops nothing else
+        },
       };
       (handlers[kind] || (() => {}))(payload);
     },
@@ -543,9 +654,11 @@
   function showRecord(record) {
     $("title").value = record.title;
     $("meta").textContent = `${when(record.created_at)} · ${clock(record.duration_seconds)} · ${megabytes(record.size_bytes)}`;
+    const names = namesOf(record);
     $("transcript").innerHTML = record.segments.length
-      ? record.segments.map((s) => lineHtml(s.start, s.text)).join("")
+      ? record.segments.map((s) => lineHtml(s.start, s.text, s.source, names)).join("")
       : `<p class="hint">${t("noSpeechHere")}</p>`;
+    renderSubtitled();
   }
 
   async function startRenaming(id) {
@@ -582,6 +695,7 @@
     await refreshList();
     if (ui.record && !tour.preview) showRecord(ui.record);
     if (tour.open) tour.show(tour.index);
+    if (ui.phase === "idle") ui.liveLabels = null;
     api().save_preferences(lang, null);
   }
 
@@ -623,15 +737,16 @@
       if (!kind) return;
       const sample = STRINGS[ui.lang].sample;
       if (kind === "live" && ui.phase === "idle") {
-        $("phrases").innerHTML = sample.map((text, i) => lineHtml(i * 4, text)).join("");
-        $("partial").textContent = "";
+        const sources = STRINGS[ui.lang].sampleSources;
+        $("phrases").innerHTML = sample.map((text, i) => lineHtml(i * 4, text, sources[i], currentLabels())).join("");
+        $("partials").innerHTML = "";
         $("live").hidden = false;
         $("detail").hidden = true;
         $("empty").hidden = true;
       } else if (kind === "detail" && !ui.selected && ui.phase === "idle") {
         $("title").value = STRINGS[ui.lang].sampleTitle;
         $("meta").textContent = `${when(new Date().toISOString())} · 12:34 · 48 MB`;
-        $("transcript").innerHTML = sample.map((text, i) => lineHtml(i * 4, text)).join("");
+        $("transcript").innerHTML = sample.map((text, i) => lineHtml(i * 4, text, STRINGS[ui.lang].sampleSources[i], currentLabels())).join("");
         $("detail").hidden = false;
         $("live").hidden = true;
         $("empty").hidden = true;
@@ -682,11 +797,36 @@
     ui.recorderError = state.recorder_error;
     $("systemAudioOption").hidden = !state.system_audio_supported;
     $("systemAudio").checked = state.settings.system_audio;
+    $("subtitles").checked = !!state.settings.subtitles;
+    ui.customLabels = { ...(state.settings.labels || {}) };
     applyLanguage();
     if (state.recorder_error) showBanner(say(state.recorder_error));
     else if (state.model.state === "error") showBanner(say(state.model.message));
 
     $("systemAudio").onchange = render;
+    $("subtitles").onchange = () => api().save_preferences(null, null, null, $("subtitles").checked);
+    document.querySelectorAll(".voices .chip").forEach((chip) => {
+      chip.onclick = () => editInPlace(chip, currentLabels()[chip.dataset.source], (value) => {
+        if (value !== null) {
+          if (value) ui.customLabels[chip.dataset.source] = value;
+          else delete ui.customLabels[chip.dataset.source];  // empty: back to the default name
+          api().save_preferences(null, null, ui.customLabels);
+        }
+        chip.querySelector(".name").textContent = currentLabels()[chip.dataset.source];
+      });
+    });
+    $("transcript").addEventListener("click", (e) => {
+      const who = e.target.closest(".who");
+      if (!who || !ui.selected || tour.preview || !ui.record) return;
+      const source = who.dataset.source;
+      editInPlace(who, namesOf(ui.record)[source], async (value) => {
+        if (value && value !== namesOf(ui.record)[source]) {
+          const result = await act(() => api().rename_label(ui.selected, source, value), t("labelRenamed"));
+          if (result && result.ok) ui.record.labels = result.labels;
+        }
+        showRecord(ui.record);
+      });
+    });
     $("langEn").onclick = () => setLanguage("en");
     $("langEs").onclick = () => setLanguage("es");
     $("help").onclick = () => tour.start();
@@ -704,9 +844,11 @@
     $("record").onclick = async () => {
       if (ui.phase === "idle") {
         $("phrases").innerHTML = "";
-        $("partial").textContent = "";
+        $("partials").innerHTML = "";
         const systemAudio = state.system_audio_supported && $("systemAudio").checked;
-        const result = await act(() => api().start($("mic").value, $("quality").value, systemAudio, ui.lang));
+        ui.liveLabels = systemAudio ? currentLabels() : null;  // with the microphone alone there is nobody to tell apart
+        const result = await act(() => api().start($("mic").value, $("quality").value, systemAudio, ui.lang,
+                                                    currentLabels(), $("subtitles").checked));
         if (result && result.ok) setPhase("listening");
       } else {
         await api().stop();
@@ -723,6 +865,11 @@
     };
     $("word").onclick = () => act(() => api().export_word(ui.selected, ui.lang), t("wordSaved"));
     $("pdf").onclick = () => act(() => api().export_pdf(ui.selected, ui.lang), t("pdfSaved"));
+    $("subtitled").onclick = async () => {
+      const id = ui.selected;
+      const result = await act(() => api().subtitled_video(id, ui.lang));
+      if (result && result.ok) { ui.subtitling.add(id); renderSubtitled(); }
+    };
     $("delete").onclick = async () => {
       if (!confirm(t("confirmDelete"))) return;
       await act(() => api().delete(ui.selected), t("deleted"));

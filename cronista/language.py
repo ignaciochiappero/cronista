@@ -1,8 +1,9 @@
 """What Cronista writes for the user outside the page, in the page's language: English or Spanish.
 
 The page translates its own words; these are the ones Python writes into files and the history:
-a new recording's title and the headings of the Word and PDF files. Months come from these lists
-rather than strftime's %b, which follows the computer's locale.
+a new recording's title, the headings of the Word and PDF files, and the names the two audio
+sources get until the user names them. Months come from these lists rather than strftime's %b,
+which follows the computer's locale.
 """
 from __future__ import annotations
 
@@ -19,6 +20,8 @@ EXPORT_WORDS = {
     "es": {"recorded": "Grabado el {:%d/%m/%Y a las %H:%M}", "transcript": "Transcripción",
            "timestamps": "Marcas de tiempo"},
 }
+# Who is who until the user says: the microphone is the person recording, the computer's sound the rest.
+DEFAULT_LABELS = {"en": {"mic": "Me", "computer": "Others"}, "es": {"mic": "Yo", "computer": "Otros"}}
 
 
 def language_or_default(language: str | None) -> str:
@@ -35,3 +38,7 @@ def default_title(started: datetime, language: str | None) -> str:
 
 def export_words(language: str | None) -> dict[str, str]:
     return EXPORT_WORDS[language_or_default(language)]
+
+
+def default_labels(language: str | None) -> dict[str, str]:
+    return dict(DEFAULT_LABELS[language_or_default(language)])

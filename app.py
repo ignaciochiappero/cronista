@@ -64,9 +64,9 @@ def self_test() -> int:
     ok = video.exists() and record["size_bytes"] > 0 and record["duration_seconds"] > 4 and not notices
     print(f"self-test: saved {video.name} {record['size_bytes']} bytes, {record['duration_seconds']} s, "
           f"{len(record['segments'])} segments, notices {notices or 'none'} -> {'OK' if ok else 'FAILED'}")
-    exported = export_check(record)
+    exported = export_check(record, api._recorder.ffmpeg)
     print(f"self-test: exported {exported or 'nothing'}")
-    ok = ok and len(exported) == 2
+    ok = ok and len(exported) == 3
     if ok:
         api.delete(record["id"])
         return 0
@@ -78,22 +78,35 @@ def self_test() -> int:
     return 1
 
 
-def export_check(record: dict) -> list[str]:
-    """Writes the Word and PDF files for a saved recording (without opening Explorer): the files
-    that came out non-empty. A silent recording gets a sample line, so the text is laid out too."""
+def export_check(record: dict, ffmpeg: str) -> list[str]:
+    """Writes the Word and PDF files and the subtitled copy of a saved recording (without opening
+    Explorer): the files that came out non-empty. A silent recording gets two sample lines, one per
+    audio source, so the labels and the subtitles are laid out too; the subtitled copy also proves
+    that the bundled ffmpeg has libass and the Media Foundation encoder."""
     from datetime import datetime
 
     from cronista.engine.transcript import TranscriptionSegment
+    from cronista.engine.voices import speakers
     from cronista.export import write_pdf, write_word
+    from cronista.subtitles import burn_subtitles
 
-    segments = [TranscriptionSegment(s["start"], s["end"], s["text"]) for s in record["segments"]] \
-        or [TranscriptionSegment(0.0, 1.0, "Prueba de exportación: acentos, eñes y ¿signos?")]
+    segments = [TranscriptionSegment(s["start"], s["end"], s["text"], s.get("source")) for s in record["segments"]] \
+        or [TranscriptionSegment(0.0, 1.5, "Prueba de exportación: acentos, eñes y ¿signos?", "mic"),
+            TranscriptionSegment(1.5, 3.0, "And a second line, from the computer.", "computer")]
+    names = speakers(segments, {"mic": "Yo", "computer": "Ana"})
+    folder = Path(record["folder"])
     written = []
     for write, name in ((write_word, "transcript.docx"), (write_pdf, "transcript.pdf")):
-        path = write(segments, Path(record["folder"]) / name, title=record["title"],
-                     recorded_at=datetime.fromisoformat(record["created_at"]))
+        path = write(segments, folder / name, title=record["title"],
+                     recorded_at=datetime.fromisoformat(record["created_at"]), names=names)
         if path.stat().st_size > 0:
             written.append(f"{name} ({path.stat().st_size} bytes)")
+    try:
+        path = burn_subtitles(ffmpeg, folder, segments, names)
+        if path.stat().st_size > 0:
+            written.append(f"{path.name} ({path.stat().st_size} bytes)")
+    except RuntimeError as error:
+        print(f"self-test: {error}")
     return written
 
 

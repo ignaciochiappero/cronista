@@ -70,3 +70,35 @@ def test_renames_and_searches_by_the_new_title(tmp_path):
     library.rename(recording_id, "Sprint review")
     assert library.get(recording_id)["title"] == "Sprint review"
     assert [r["id"] for r in library.list(search="sprint")] == [recording_id]
+
+
+def test_keeps_each_recordings_labels_and_renames_one(tmp_path):
+    library = Library(tmp_path / "library.db")
+    recording_id = library.add(title="call", created_at="2026-10-20T10:00:00", duration_seconds=60.0, size_bytes=1,
+                               folder=str(tmp_path), video_path=str(tmp_path / "recording.mp4"), transcript="hi",
+                               segments=[{"start": 0.0, "end": 1.0, "text": "hi", "source": "computer"}],
+                               labels={"mic": "Me", "computer": "Others"})
+    assert library.get(recording_id)["labels"] == {"mic": "Me", "computer": "Others"}
+    assert library.get(recording_id)["segments"][0]["source"] == "computer"
+    library.set_label(recording_id, "computer", "Ana")
+    assert library.get(recording_id)["labels"] == {"mic": "Me", "computer": "Ana"}
+
+
+def test_a_history_from_before_labels_gets_them_without_losing_anything(tmp_path):
+    import sqlite3
+
+    from cronista.library import SCHEMA
+
+    path = tmp_path / "library.db"
+    with sqlite3.connect(path) as db:  # the tables as versions up to 0.4.0 made them: no labels column
+        old_schema = SCHEMA.replace(",\n    labels_json TEXT DEFAULT '{}'", "")
+        assert "labels_json" not in old_schema
+        db.executescript(old_schema)
+        db.execute("INSERT INTO recordings (id, title, created_at, folder, video_path, transcript, segments_json) "
+                   "VALUES ('old', 'Old', '2026-10-01T10:00:00', 'f', 'v', 'hola', "
+                   "'[{\"start\": 0, \"end\": 1, \"text\": \"hola\"}]')")
+    library = Library(path)
+    old = library.get("old")
+    assert old["labels"] == {} and old["segments"][0]["text"] == "hola"
+    library.set_label("old", "mic", "Yo")
+    assert library.get("old")["labels"] == {"mic": "Yo"}

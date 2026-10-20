@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS recordings (
     video_path TEXT NOT NULL,
     transcript TEXT DEFAULT '',
     segments_json TEXT DEFAULT '[]',
-    notes TEXT DEFAULT ''
+    notes TEXT DEFAULT '',
+    labels_json TEXT DEFAULT '{}'
 );
 CREATE VIRTUAL TABLE IF NOT EXISTS recordings_fts
     USING fts5(title, transcript, notes, content='recordings', content_rowid='rowid');
@@ -59,6 +60,10 @@ class Library:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
             db.executescript(SCHEMA)
+            # Histories from before 0.5.0 have no labels column: add it, empty, keeping everything else.
+            columns = {row["name"] for row in db.execute("PRAGMA table_info(recordings)")}
+            if "labels_json" not in columns:
+                db.execute("ALTER TABLE recordings ADD COLUMN labels_json TEXT DEFAULT '{}'")
 
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(str(self.path))
@@ -66,14 +71,15 @@ class Library:
         return db
 
     def add(self, *, title: str, created_at: str, duration_seconds: float, size_bytes: int, folder: str,
-            video_path: str, transcript: str, segments: list[dict]) -> str:
+            video_path: str, transcript: str, segments: list[dict], labels: dict | None = None) -> str:
+        """`labels`: the name of each audio source ("mic", "computer") when the recording was made."""
         recording_id = uuid.uuid4().hex
         with self._connect() as db:
             db.execute(
                 "INSERT INTO recordings (id, title, created_at, duration_seconds, size_bytes, folder, video_path, "
-                "transcript, segments_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "transcript, segments_json, labels_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (recording_id, title, created_at, duration_seconds, size_bytes, folder, video_path,
-                 transcript, json.dumps(segments, ensure_ascii=False)),
+                 transcript, json.dumps(segments, ensure_ascii=False), json.dumps(labels or {}, ensure_ascii=False)),
             )
         return recording_id
 
@@ -102,7 +108,18 @@ class Library:
             return None
         record = dict(row)
         record["segments"] = json.loads(record.pop("segments_json") or "[]")
+        record["labels"] = json.loads(record.pop("labels_json") or "{}")
         return record
+
+    def set_label(self, recording_id: str, source: str, label: str) -> None:
+        """Names one audio source of one recording ("computer" -> "Ana")."""
+        record = self.get(recording_id)
+        if record is None:
+            return
+        labels = {**record["labels"], source: label}
+        with self._connect() as db:
+            db.execute("UPDATE recordings SET labels_json = ? WHERE id = ?",
+                       (json.dumps(labels, ensure_ascii=False), recording_id))
 
     def rename(self, recording_id: str, title: str) -> None:
         with self._connect() as db:

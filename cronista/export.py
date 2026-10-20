@@ -4,9 +4,13 @@ write_word is escriba's DocumentService.generate (backend/app/services/document.
 headings in English or Spanish (language.py) and without the language-detection line: the full text in readable paragraphs first,
 then every segment with its time range. write_pdf lays out the same with reportlab, in a Windows
 TrueType font embedded in the file (Segoe UI, else Arial), so accents, ñ and ¿¡ show anywhere.
+
+With `names` (voices.speakers: the label of each audio source, when both spoke), every file says
+who said what: the reading part goes by turns ("Ana: ..."), and each timed line has its speaker.
 """
 from __future__ import annotations
 
+import itertools
 import os
 import threading
 from datetime import datetime
@@ -18,6 +22,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt, RGBColor
 
 from .engine.transcript import TranscriptionSegment, to_srt
+from .engine.voices import line
 from .language import export_words
 
 # (regular, bold), in order of preference; reportlab's built-in Helvetica if none is there.
@@ -56,17 +61,30 @@ def _reading_paragraphs(segments: list[TranscriptionSegment]) -> list[str]:
     return paragraphs
 
 
-def write_text_files(segments: list[TranscriptionSegment], folder: Path) -> tuple[Path, Path]:
+def _turns(segments: list[TranscriptionSegment], names: dict[str, str] | None) -> list[tuple[str | None, str]]:
+    """The paragraphs to read, as (speaker, text): with names, a new one each time the speaker changes
+    (a long turn is split like _reading_paragraphs, the speaker said once); without, as before."""
+    if not names:
+        return [(None, paragraph) for paragraph in _reading_paragraphs(segments)]
+    turns: list[tuple[str | None, str]] = []
+    for source, said in itertools.groupby(segments, key=lambda segment: segment.source):
+        for index, paragraph in enumerate(_reading_paragraphs(list(said))):
+            turns.append((names.get(source) if index == 0 else None, paragraph))
+    return turns
+
+
+def write_text_files(segments: list[TranscriptionSegment], folder: Path,
+                     names: dict[str, str] | None = None) -> tuple[Path, Path]:
     folder = Path(folder)
     srt = folder / "transcript.srt"
     txt = folder / "transcript.txt"
-    srt.write_text(to_srt(segments), encoding="utf-8")
-    txt.write_text("".join(f"{segment.text}\n" for segment in segments), encoding="utf-8")
+    srt.write_text(to_srt(segments, names), encoding="utf-8")
+    txt.write_text("".join(f"{line(segment, names)}\n" for segment in segments), encoding="utf-8")
     return srt, txt
 
 
 def write_word(segments: list[TranscriptionSegment], output_path: Path, *, title: str, recorded_at: datetime,
-               language: str = "en") -> Path:
+               language: str = "en", names: dict[str, str] | None = None) -> Path:
     words = export_words(language)
     doc = Document()
     style = doc.styles["Normal"]
@@ -84,8 +102,11 @@ def write_word(segments: list[TranscriptionSegment], output_path: Path, *, title
     run.font.color.rgb = RGBColor(100, 100, 100)
 
     doc.add_heading(words["transcript"], level=2)
-    for paragraph in _reading_paragraphs(segments):
-        doc.add_paragraph(paragraph)
+    for speaker, text in _turns(segments, names):
+        paragraph = doc.add_paragraph()
+        if speaker:
+            paragraph.add_run(f"{speaker}: ").bold = True
+        paragraph.add_run(text)
 
     doc.add_heading(words["timestamps"], level=2)
     for segment in segments:
@@ -95,6 +116,10 @@ def write_word(segments: list[TranscriptionSegment], output_path: Path, *, title
         stamp.bold = True
         stamp.font.size = Pt(9)
         stamp.font.color.rgb = RGBColor(70, 70, 70)
+        if names and segment.source in names:
+            speaker = paragraph.add_run(f"{names[segment.source]}: ")
+            speaker.bold = True
+            speaker.font.size = Pt(10)
         paragraph.add_run(segment.text).font.size = Pt(10)
 
     output = Path(output_path)
@@ -124,7 +149,8 @@ def _pdf_fonts() -> tuple[str, str]:
         return _pdf_fonts_found
 
 
-def pdf_story(segments: list[TranscriptionSegment], *, title: str, recorded_at: datetime, language: str = "en") -> list:
+def pdf_story(segments: list[TranscriptionSegment], *, title: str, recorded_at: datetime, language: str = "en",
+              names: dict[str, str] | None = None) -> list:
     """The PDF's content as reportlab flowables: what write_word writes, in the same order."""
     from reportlab.lib.colors import HexColor
     from reportlab.lib.enums import TA_CENTER
@@ -138,20 +164,25 @@ def pdf_story(segments: list[TranscriptionSegment], *, title: str, recorded_at: 
                                 textColor=HexColor("#646464"), spaceAfter=16)
     heading = ParagraphStyle("heading", fontName=bold, fontSize=13, leading=17, spaceBefore=10, spaceAfter=6)
     body = ParagraphStyle("body", fontName=regular, fontSize=11, leading=15.5, spaceAfter=7)
-    line = ParagraphStyle("line", fontName=regular, fontSize=10, leading=13.5, spaceAfter=2.5)
+    timed_style = ParagraphStyle("line", fontName=regular, fontSize=10, leading=13.5, spaceAfter=2.5)
 
     story = [Paragraph(escape(title), title_style),
              Paragraph(escape(words["recorded"].format(recorded_at)), meta_style),
              Paragraph(words["transcript"], heading)]
-    story += [Paragraph(escape(text), body) for text in _reading_paragraphs(segments)]
+    story += [Paragraph((f"<b>{escape(speaker)}:</b> " if speaker else "") + escape(text), body)
+              for speaker, text in _turns(segments, names)]
     story.append(Paragraph(words["timestamps"], heading))
-    story += [Paragraph(f'<font size="9" color="#464646"><b>{_time_range(segment)}</b></font> {escape(segment.text)}', line)
-              for segment in segments]
+
+    def timed(segment: TranscriptionSegment) -> str:
+        speaker = f"<b>{escape(names[segment.source])}:</b> " if names and segment.source in names else ""
+        return f'<font size="9" color="#464646"><b>{_time_range(segment)}</b></font> {speaker}{escape(segment.text)}'
+
+    story += [Paragraph(timed(segment), timed_style) for segment in segments]
     return story
 
 
 def write_pdf(segments: list[TranscriptionSegment], output_path: Path, *, title: str, recorded_at: datetime,
-              language: str = "en") -> Path:
+              language: str = "en", names: dict[str, str] | None = None) -> Path:
     from reportlab.lib.colors import HexColor
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import cm
@@ -171,6 +202,6 @@ def write_pdf(segments: list[TranscriptionSegment], output_path: Path, *, title:
     output.parent.mkdir(parents=True, exist_ok=True)
     document = SimpleDocTemplate(str(output), pagesize=A4, title=title, author="Cronista",
                                  leftMargin=margin, rightMargin=margin, topMargin=2 * cm, bottomMargin=2 * cm)
-    document.build(pdf_story(segments, title=title, recorded_at=recorded_at, language=language),
+    document.build(pdf_story(segments, title=title, recorded_at=recorded_at, language=language, names=names),
                    onFirstPage=page_number, onLaterPages=page_number)
     return output
