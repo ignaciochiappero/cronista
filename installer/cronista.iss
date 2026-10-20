@@ -6,7 +6,7 @@
 ; (%LOCALAPPDATA%\Cronista) stay, since they are the user's.
 
 #define AppName "Cronista"
-#define AppVersion "0.6.0"
+#define AppVersion "0.7.0"
 
 [Setup]
 AppId={{6F0B2C8E-3D7A-4E1F-9A5B-2C4D8E6F1A30}
