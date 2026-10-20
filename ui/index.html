@@ -5,14 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cronista</title>
 <style>
-  /* Near-black neutrals with a cool tint, hairline borders, one accent (the logo's red), small
-     fast motion. System fonts only: the app works offline. */
+  /* Near-black neutrals with a cool tint, hairline borders, one accent, small fast motion. System
+     fonts only: the app works offline. Every look is a set of these variables: "system" (no
+     data-theme) is dark or light as Windows is; the others are picked in the Theme menu. The
+     recording red and the danger red stay the same in all of them, since they mean something. */
   :root {
     color-scheme: dark;
     --bg: #0b0c0f; --surface: #111216; --surface-2: #17181d; --surface-3: #1e1f25;
     --border: rgba(255, 255, 255, 0.07); --border-strong: rgba(255, 255, 255, 0.13);
     --text: #ececef; --text-2: #a3a4ad; --text-3: #6e6f79;
-    --accent: #ff5a4e; --accent-2: #f23b4c; --accent-soft: rgba(255, 90, 78, 0.12); --accent-text: #ff8a7f;
+    --accent: #ff5a4e; --accent-soft: rgba(255, 90, 78, 0.12); --accent-text: #ff8a7f;
+    --rec: #ff5a4e; --rec-soft: rgba(255, 90, 78, 0.12); --rec-text: #ff8a7f;
+    --danger: #ff7b72; --danger-soft: rgba(255, 90, 78, 0.12);
     --ok: #3ddc97; --warn: #f5b74f;
     --mic: #ff8a7f; --mic-bg: rgba(255, 90, 78, 0.13); --computer: #8ab4ff; --computer-bg: rgba(110, 160, 255, 0.14);
     --mark: rgba(255, 200, 87, 0.28);
@@ -23,16 +27,83 @@
     --mono: "Cascadia Mono", "Cascadia Code", "JetBrains Mono", Consolas, ui-monospace, monospace;
   }
   @media (prefers-color-scheme: light) {
-    :root {
+    :root:not([data-theme]) {
       color-scheme: light;
       --bg: #f6f6f7; --surface: #ffffff; --surface-2: #f1f1f3; --surface-3: #e9e9ec;
       --border: rgba(12, 13, 18, 0.08); --border-strong: rgba(12, 13, 18, 0.14);
       --text: #111216; --text-2: #575864; --text-3: #8b8c96;
-      --accent-soft: rgba(242, 59, 76, 0.09); --accent-text: #d8323f;
+      --accent: #f23b4c; --accent-soft: rgba(242, 59, 76, 0.09); --accent-text: #d8323f;
+      --rec-soft: rgba(242, 59, 76, 0.09); --rec-text: #d8323f; --danger: #c42b36; --danger-soft: rgba(242, 59, 76, 0.09);
       --mic: #d8323f; --mic-bg: rgba(242, 59, 76, 0.09); --computer: #2f63c9; --computer-bg: rgba(47, 99, 201, 0.09);
       --mark: rgba(255, 196, 0, 0.32);
       --shadow: 0 1px 2px rgba(12, 13, 18, 0.04), 0 8px 24px rgba(12, 13, 18, 0.06);
     }
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: #f6f6f7; --surface: #ffffff; --surface-2: #f1f1f3; --surface-3: #e9e9ec;
+    --border: rgba(12, 13, 18, 0.08); --border-strong: rgba(12, 13, 18, 0.14);
+    --text: #111216; --text-2: #575864; --text-3: #8b8c96;
+    --accent: #f23b4c; --accent-soft: rgba(242, 59, 76, 0.09); --accent-text: #d8323f;
+    --rec-soft: rgba(242, 59, 76, 0.09); --rec-text: #d8323f; --danger: #c42b36; --danger-soft: rgba(242, 59, 76, 0.09);
+    --mic: #d8323f; --mic-bg: rgba(242, 59, 76, 0.09); --computer: #2f63c9; --computer-bg: rgba(47, 99, 201, 0.09);
+    --mark: rgba(255, 196, 0, 0.32);
+    --shadow: 0 1px 2px rgba(12, 13, 18, 0.04), 0 8px 24px rgba(12, 13, 18, 0.06);
+  }
+  :root[data-theme="midnight"] {
+    --bg: #070b17; --surface: #0c1222; --surface-2: #121a2e; --surface-3: #19223a;
+    --border: rgba(140, 170, 255, 0.10); --border-strong: rgba(140, 170, 255, 0.19);
+    --text: #e6ecff; --text-2: #9aa6c4; --text-3: #66718f;
+    --accent: #5b8cff; --accent-soft: rgba(91, 140, 255, 0.15); --accent-text: #8fb0ff;
+    --mic: #ff9a9a; --mic-bg: rgba(255, 110, 110, 0.14); --computer: #7cc4ff; --computer-bg: rgba(90, 170, 255, 0.16);
+  }
+  :root[data-theme="ocean"] {
+    --bg: #051316; --surface: #0a1c20; --surface-2: #0f262b; --surface-3: #163238;
+    --border: rgba(120, 230, 220, 0.09); --border-strong: rgba(120, 230, 220, 0.18);
+    --text: #e3f6f4; --text-2: #95b9b6; --text-3: #5f8582;
+    --accent: #2dd4bf; --accent-soft: rgba(45, 212, 191, 0.14); --accent-text: #6ee7d8;
+    --mic: #ffa98a; --mic-bg: rgba(255, 140, 100, 0.14); --computer: #7dd3fc; --computer-bg: rgba(125, 211, 252, 0.14);
+  }
+  :root[data-theme="forest"] {
+    --bg: #0a120d; --surface: #0f1a13; --surface-2: #15231a; --surface-3: #1c2d22;
+    --border: rgba(160, 230, 180, 0.08); --border-strong: rgba(160, 230, 180, 0.17);
+    --text: #e6f2e9; --text-2: #9bb8a3; --text-3: #64806c;
+    --accent: #4ade80; --accent-soft: rgba(74, 222, 128, 0.13); --accent-text: #86efac;
+    --mic: #fca5a5; --mic-bg: rgba(248, 113, 113, 0.14); --computer: #93c5fd; --computer-bg: rgba(147, 197, 253, 0.14);
+  }
+  :root[data-theme="grape"] {
+    --bg: #110c1a; --surface: #171024; --surface-2: #1f1630; --surface-3: #281d3d;
+    --border: rgba(210, 170, 255, 0.09); --border-strong: rgba(210, 170, 255, 0.18);
+    --text: #f1e9ff; --text-2: #b3a3cc; --text-3: #7a6b93;
+    --accent: #e879f9; --accent-soft: rgba(232, 121, 249, 0.14); --accent-text: #f0abfc;
+    --mic: #fda4af; --mic-bg: rgba(251, 113, 133, 0.15); --computer: #a5b4fc; --computer-bg: rgba(165, 180, 252, 0.15);
+  }
+  :root[data-theme="sunset"] {
+    --bg: #140d0a; --surface: #1c130f; --surface-2: #241914; --surface-3: #2e201a;
+    --border: rgba(255, 190, 150, 0.09); --border-strong: rgba(255, 190, 150, 0.18);
+    --text: #fbeee6; --text-2: #c4a898; --text-3: #8a7064;
+    --accent: #ff9a52; --accent-soft: rgba(255, 154, 82, 0.14); --accent-text: #ffbd8a;
+    --mic: #ff9a9a; --mic-bg: rgba(255, 110, 110, 0.15); --computer: #93c5fd; --computer-bg: rgba(147, 197, 253, 0.14);
+  }
+  :root[data-theme="paper"] {
+    color-scheme: light;
+    --bg: #f4eee3; --surface: #fbf8f1; --surface-2: #efe7d8; --surface-3: #e6dcc9;
+    --border: rgba(60, 40, 20, 0.10); --border-strong: rgba(60, 40, 20, 0.19);
+    --text: #2b2118; --text-2: #6b5a48; --text-3: #9a8a77;
+    --accent: #c2410c; --accent-soft: rgba(194, 65, 12, 0.10); --accent-text: #b3360a;
+    --rec-soft: rgba(242, 59, 76, 0.10); --rec-text: #c42b36; --danger: #b42318; --danger-soft: rgba(194, 40, 30, 0.09);
+    --mic: #b3360a; --mic-bg: rgba(194, 65, 12, 0.10); --computer: #1d5fa8; --computer-bg: rgba(29, 95, 168, 0.10);
+    --mark: rgba(255, 196, 0, 0.35);
+    --shadow: 0 1px 2px rgba(60, 40, 20, 0.05), 0 8px 24px rgba(60, 40, 20, 0.07);
+  }
+  :root[data-theme="contrast"] {
+    --bg: #000000; --surface: #000000; --surface-2: #0d0d0d; --surface-3: #1c1c1c;
+    --border: rgba(255, 255, 255, 0.42); --border-strong: #ffffff;
+    --text: #ffffff; --text-2: #f2f2f2; --text-3: #cfcfcf;
+    --accent: #ffd60a; --accent-soft: rgba(255, 214, 10, 0.18); --accent-text: #ffe45c;
+    --mic: #ffd60a; --mic-bg: rgba(255, 214, 10, 0.16); --computer: #7cf0ff; --computer-bg: rgba(124, 240, 255, 0.16);
+    --mark: rgba(255, 214, 10, 0.45);
+    --shadow: none;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
@@ -45,8 +116,8 @@
   button.ghost:hover:not(:disabled) { background: var(--surface-2); color: var(--text); border-color: var(--border); }
   button.primary { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600; }
   button.primary:hover:not(:disabled) { background: var(--text); opacity: .9; }
-  button.danger { color: var(--accent-text); }
-  button.danger:hover:not(:disabled) { background: var(--accent-soft); border-color: transparent; }
+  button.danger { color: var(--danger); }
+  button.danger:hover:not(:disabled) { background: var(--danger-soft); border-color: transparent; }
   .icon { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
   input, select { border: 1px solid var(--border); background: var(--surface-2); border-radius: 8px; padding: 7px 10px; outline: none; transition: border-color .12s, background .12s; }
   input:hover, select:hover { border-color: var(--border-strong); }
@@ -67,8 +138,8 @@
   .pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); }
   .pill.ready i { background: var(--ok); }
   .pill.busy i { background: var(--warn); animation: blink 1.2s ease-in-out infinite; }
-  .pill.live { color: var(--accent-text); background: var(--accent-soft); border-color: transparent; }
-  .pill.live i { background: var(--accent); animation: blink 1s ease-in-out infinite; }
+  .pill.live { color: var(--rec-text); background: var(--rec-soft); border-color: transparent; }
+  .pill.live i { background: var(--rec); animation: blink 1s ease-in-out infinite; }
   @keyframes blink { 50% { opacity: .35; } }
   .spacer { flex: 1; }
   .segmented { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); }
@@ -95,7 +166,7 @@
   main { overflow-y: auto; scrollbar-gutter: stable; }  /* no shift when a scrollbar comes or goes */
   .column { max-width: 880px; margin: 0 auto; padding: 22px 26px 40px; display: flex; flex-direction: column; gap: 16px; }
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow); }
-  .banner { border: 1px solid var(--accent-soft); background: var(--accent-soft); color: var(--accent-text); border-radius: var(--radius); padding: 10px 14px; }
+  .banner { border: 1px solid var(--danger-soft); background: var(--danger-soft); color: var(--danger); border-radius: var(--radius); padding: 10px 14px; }
 
   .recorder { padding: 18px 20px 22px; }
   .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -116,9 +187,9 @@
   .stage { display: flex; align-items: center; gap: 22px; margin-top: 20px; }
   .record { position: relative; width: 76px; height: 76px; border-radius: 50%; padding: 0; justify-content: center; background: var(--surface-2); border: 1px solid var(--border-strong); flex: none; }
   .record::before { content: ""; position: absolute; inset: -7px; border-radius: 50%; border: 1px solid var(--border); transition: border-color .2s, inset .2s; }
-  .record .dot { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(180deg, #ff6a55, var(--accent-2)); box-shadow: 0 6px 18px rgba(242, 59, 76, .35); transition: border-radius .2s, width .2s, height .2s; }
+  .record .dot { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(180deg, #ff6a55, #f23b4c); box-shadow: 0 6px 18px rgba(242, 59, 76, .35); transition: border-radius .2s, width .2s, height .2s; }
   .record:hover:not(:disabled) .dot { box-shadow: 0 6px 24px rgba(242, 59, 76, .55); }
-  .record.active { background: var(--accent-soft); border-color: rgba(255, 90, 78, .45); }
+  .record.active { background: var(--rec-soft); border-color: rgba(255, 90, 78, .45); }
   .record.active::before { border-color: rgba(255, 90, 78, .35); animation: halo 1.6s ease-out infinite; }
   .record.active .dot { width: 24px; height: 24px; border-radius: 6px; }
   @keyframes halo { 0% { inset: -4px; opacity: 1; } 100% { inset: -14px; opacity: 0; } }
@@ -127,7 +198,7 @@
 
   .card-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px 0; }
   .card-head h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
-  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: blink 1s ease-in-out infinite; }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--rec); animation: blink 1s ease-in-out infinite; }
   .lines { padding: 10px 18px 16px; }
   .line { display: grid; grid-template-columns: 58px 1fr; gap: 10px; padding: 5px 8px; margin: 0 -8px; border-radius: 7px; animation: rise .25s ease both; }
   .line:hover { background: var(--surface-2); }
@@ -172,7 +243,7 @@
   .toast { position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 8px); display: inline-flex; align-items: center; gap: 8px; background: var(--surface-3); color: var(--text); border: 1px solid var(--border-strong); box-shadow: var(--shadow); padding: 9px 14px; border-radius: 999px; max-width: 560px; opacity: 0; transition: opacity .18s, transform .18s; pointer-events: none; font-size: 13px; z-index: 30; }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
   .toast .icon { color: var(--ok); }
-  .toast.error .icon { color: var(--accent); }
+  .toast.error .icon { color: var(--danger); }
 
   /* The tour: a spotlight that glides from one part of the window to the next, and a card. */
   .tour { position: fixed; inset: 0; z-index: 40; }
@@ -188,6 +259,16 @@
   .tour-bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; transition: width .35s; }
   .tour-actions { display: flex; align-items: center; gap: 6px; }
   .tour-preview { outline: none; }
+
+  /* The theme menu: a sample of each look, applied as soon as it is picked. */
+  .themes { position: fixed; z-index: 35; width: 372px; padding: 14px 14px 12px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); box-shadow: 0 24px 60px rgba(0, 0, 0, .4); }
+  .themes h2 { margin: 0 0 10px 2px; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
+  .theme-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .theme { gap: 10px; padding: 6px 10px 6px 6px; border-radius: 10px; font-size: 13px; text-align: left; color: var(--text-2); background: transparent; border-color: transparent; }
+  .theme:hover:not(:disabled) { background: var(--surface-2); border-color: var(--border); color: var(--text); }
+  .theme[aria-pressed="true"] { background: var(--surface-2); border-color: var(--accent); color: var(--text); }
+  .swatch { position: relative; width: 38px; height: 26px; flex: none; border-radius: 7px; overflow: hidden; box-shadow: 0 0 0 1px rgba(128, 128, 128, .35) inset; }
+  .swatch i { position: absolute; display: block; }
 
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
@@ -215,6 +296,7 @@
     <symbol id="i-captions" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M7.5 14.5h4M13.5 14.5h3M7.5 11h2.5M12 11h4.5"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V5.2A.7.7 0 0 1 10.2 4.5h3.6a.7.7 0 0 1 .7.7V7M6.5 7l.9 11.6A1.5 1.5 0 0 0 8.9 20h6.2a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/></symbol>
     <symbol id="i-pencil" viewBox="0 0 24 24"><path d="m14.5 6 3.5 3.5M5 19l1-4.2L15.8 5a1.4 1.4 0 0 1 2 0l1.2 1.2a1.4 1.4 0 0 1 0 2L9.2 18z"/></symbol>
+    <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.2 0 1.9-1 1.6-2.1-.3-1.1.2-2.2 1.4-2.5 1.2-.3 2.5.1 3.5-.4a3 3 0 0 0 2-2.9A8.6 8.6 0 0 0 12 3.5z"/><path d="M7.6 11.2h.01M10.4 7.6h.01M14.6 7.8h.01"/></symbol>
     <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9.7 9.6a2.4 2.4 0 0 1 4.6 1c0 1.6-2.3 2-2.3 3.4"/><path d="M12 17h.01"/></symbol>
     <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V20.5"/></symbol>
     <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4.5 16a7.5 7.5 0 1 1 15 0"/><path d="m12 16 3.5-4.5"/></symbol>
@@ -232,6 +314,7 @@
       <button id="langEn" aria-pressed="false">EN</button>
       <button id="langEs" aria-pressed="false">ES</button>
     </div>
+    <button class="ghost" id="themeButton" data-tour="theme" data-i18n-title="themeTip" aria-haspopup="dialog"><svg class="icon"><use href="#i-palette"/></svg><span data-i18n="theme"></span></button>
     <button class="ghost" id="help" data-i18n-title="helpTitle"><svg class="icon"><use href="#i-help"/></svg><span data-i18n="help"></span></button>
     <button class="ghost" id="openFolder" data-i18n-title="openFolderTitle"><svg class="icon"><use href="#i-folder"/></svg><span data-i18n="openFolder"></span></button>
   </header>
@@ -301,6 +384,10 @@
   </div>
 </div>
 <div class="toast" id="toast"><svg class="icon"><use href="#i-check"/></svg><span id="toastText"></span></div>
+<div class="themes" id="themes" role="dialog" aria-labelledby="themesTitle" hidden>
+  <h2 id="themesTitle" data-i18n="theme"></h2>
+  <div class="theme-grid" id="themeGrid"></div>
+</div>
 <div class="tour" id="tour" hidden>
   <div class="tour-veil"></div>
   <div class="tour-spot" id="tourSpot"></div>
@@ -341,6 +428,9 @@
       count: (n) => n === 1 ? "1 recording" : `${n} recordings`,
       found: (n) => n === 1 ? "1 match" : `${n} matches`,
       voices: "Labels", labelTip: "Click to name this voice", labelRenamed: "Label renamed",
+      theme: "Theme", themeTip: "Choose how Cronista looks",
+      themes: { system: "System", dark: "Dark", light: "Light", midnight: "Midnight", ocean: "Ocean", forest: "Forest",
+                grape: "Grape", sunset: "Sunset", paper: "Paper", contrast: "High contrast" },
       subtitlesSwitch: "Subtitled copy", subtitlesTitle: "When the recording stops, also make a copy of the video with its subtitles",
       subtitled: "Subtitled video", subtitling: "Subtitling…", revealTitle: "Show the video in its folder", subtitledSaved: "Subtitled video saved next to the video",
       back: "Back", next: "Next", done: "Done", skip: "Skip tour", of: "of",
@@ -355,6 +445,7 @@
         { target: "history", title: "History and search", body: "Every recording, newest first. Search finds a recording by anything that was said in it." },
         { target: "detail", preview: "detail", title: "Each recording", body: "Click the title to rename it. Play the video, open its folder, or copy the text." },
         { target: "exports", preview: "detail", title: "Word, PDF and subtitles", body: "Export the transcript with its timestamps, or make a copy of the video with subtitles. The files are saved next to the video." },
+        { target: "theme", title: "Your theme", body: "Ten looks, from System, which follows Windows, to Midnight, Forest or Paper. Pick one here." },
         { target: "language", title: "Your language", body: "Switch between English and Spanish here. The Guide button brings this tour back." },
       ],
       sample: ["Hi everyone, let's go over the plan for this week.", "First, the release: it goes out on Thursday."],
@@ -383,6 +474,9 @@
       count: (n) => n === 1 ? "1 grabación" : `${n} grabaciones`,
       found: (n) => n === 1 ? "1 resultado" : `${n} resultados`,
       voices: "Etiquetas", labelTip: "Haz clic para ponerle nombre a esta voz", labelRenamed: "Etiqueta cambiada",
+      theme: "Tema", themeTip: "Elegir cómo se ve Cronista",
+      themes: { system: "Sistema", dark: "Oscuro", light: "Claro", midnight: "Medianoche", ocean: "Océano", forest: "Bosque",
+                grape: "Uva", sunset: "Atardecer", paper: "Papel", contrast: "Alto contraste" },
       subtitlesSwitch: "Copia subtitulada", subtitlesTitle: "Al detener, hacer también una copia del video con sus subtítulos",
       subtitled: "Video subtitulado", subtitling: "Subtitulando…", revealTitle: "Ver el video en su carpeta", subtitledSaved: "Video subtitulado guardado junto al video",
       back: "Atrás", next: "Siguiente", done: "Listo", skip: "Saltar guía", of: "de",
@@ -397,6 +491,7 @@
         { target: "history", title: "Historial y búsqueda", body: "Todas tus grabaciones, de la más nueva a la más vieja. El buscador encuentra una grabación por cualquier cosa que se dijo en ella." },
         { target: "detail", preview: "detail", title: "Cada grabación", body: "Haz clic en el título para renombrarla. Reproduce el video, abre su carpeta o copia el texto." },
         { target: "exports", preview: "detail", title: "Word, PDF y subtítulos", body: "Exporta la transcripción con sus marcas de tiempo, o haz una copia del video con subtítulos. Los archivos se guardan junto al video." },
+        { target: "theme", title: "Tu tema", body: "Diez estilos, desde Sistema, que sigue a Windows, hasta Medianoche, Bosque o Papel. Elige uno aquí." },
         { target: "language", title: "Tu idioma", body: "Cambia entre inglés y español desde aquí. El botón Guía vuelve a abrir este recorrido." },
       ],
       sample: ["Hola a todos, repasemos el plan de esta semana.", "Primero, el lanzamiento: sale el jueves."],
@@ -434,6 +529,15 @@
   // The names the two audio sources have until the user gives them others (language.py says the same).
   const DEFAULT_LABELS = { en: { mic: "Me", computer: "Others" }, es: { mic: "Yo", computer: "Otros" } };
   const currentLabels = () => ({ ...DEFAULT_LABELS[ui.lang], ...ui.customLabels });
+  // The looks, with the colors their samples show: background, a card on it, the accent.
+  const THEMES = [
+    ["system", "linear-gradient(135deg, #0b0c0f 50%, #f6f6f7 50%)", "transparent", "#ff5a4e"],
+    ["dark", "#0b0c0f", "#1e1f25", "#ff5a4e"], ["light", "#f6f6f7", "#ffffff", "#f23b4c"],
+    ["midnight", "#070b17", "#19223a", "#5b8cff"], ["ocean", "#051316", "#163238", "#2dd4bf"],
+    ["forest", "#0a120d", "#1c2d22", "#4ade80"], ["grape", "#110c1a", "#281d3d", "#e879f9"],
+    ["sunset", "#140d0a", "#2e201a", "#ff9a52"], ["paper", "#f4eee3", "#fbf8f1", "#c2410c"],
+    ["contrast", "#000000", "#1c1c1c", "#ffd60a"],
+  ];
   const t = (key) => STRINGS[ui.lang][key] ?? STRINGS.en[key] ?? key;
   // Python's messages are English; known ones, or known beginnings, are said in the page's language.
   const say = (message) => {
@@ -484,6 +588,7 @@
     $("langEs").setAttribute("aria-pressed", String(ui.lang === "es"));
     if (ui.state) fillControls(ui.state);
     showChips();
+    showThemes();
     render();
   }
 
@@ -556,6 +661,32 @@
     document.querySelectorAll(".voices .chip").forEach((chip) => {
       if (!chip.querySelector("input")) chip.querySelector(".name").textContent = labels[chip.dataset.source];
     });
+  }
+
+  function applyTheme(id) {
+    ui.theme = THEMES.some(([known]) => known === id) ? id : "system";
+    if (ui.theme === "system") document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.dataset.theme = ui.theme;
+    showThemes();
+  }
+
+  function showThemes() {
+    $("themeGrid").innerHTML = THEMES.map(([id, bg, card, accent]) => `
+      <button class="theme" data-theme-id="${id}" aria-pressed="${id === ui.theme}">
+        <span class="swatch" style="background: ${bg}">
+          <i style="left: 5px; top: 6px; width: 19px; height: 14px; border-radius: 3px; background: ${card}"></i>
+          <i style="right: 5px; top: 9px; width: 8px; height: 8px; border-radius: 50%; background: ${accent}"></i>
+        </span>${escapeHtml(t("themes")[id])}</button>`).join("");
+  }
+
+  function openThemes(open) {
+    const menu = $("themes");
+    menu.hidden = !open;
+    $("themeButton").setAttribute("aria-expanded", String(open));
+    if (!open) return;
+    const button = $("themeButton").getBoundingClientRect();
+    menu.style.top = `${button.bottom + 8}px`;
+    menu.style.left = `${Math.max(14, Math.min(button.right - menu.offsetWidth, innerWidth - menu.offsetWidth - 14))}px`;
   }
 
   function renderSubtitled() {
@@ -799,12 +930,24 @@
     $("systemAudio").checked = state.settings.system_audio;
     $("subtitles").checked = !!state.settings.subtitles;
     ui.customLabels = { ...(state.settings.labels || {}) };
+    applyTheme(state.settings.theme || "system");
     applyLanguage();
     if (state.recorder_error) showBanner(say(state.recorder_error));
     else if (state.model.state === "error") showBanner(say(state.model.message));
 
     $("systemAudio").onchange = render;
     $("subtitles").onchange = () => api().save_preferences(null, null, null, $("subtitles").checked);
+    $("themeButton").onclick = (e) => { e.stopPropagation(); openThemes($("themes").hidden); };
+    $("themeGrid").addEventListener("click", (e) => {
+      const choice = e.target.closest("[data-theme-id]");
+      if (!choice) return;
+      applyTheme(choice.dataset.themeId);
+      api().save_preferences(null, null, null, null, ui.theme);
+    });
+    $("themes").addEventListener("click", (e) => e.stopPropagation());
+    document.addEventListener("click", () => openThemes(false));  // a click anywhere else closes the menu
+    addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("themes").hidden) openThemes(false); });
+    addEventListener("resize", () => { if (!$("themes").hidden) openThemes(true); });
     document.querySelectorAll(".voices .chip").forEach((chip) => {
       chip.onclick = () => editInPlace(chip, currentLabels()[chip.dataset.source], (value) => {
         if (value !== null) {

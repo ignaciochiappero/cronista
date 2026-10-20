@@ -28,6 +28,10 @@ from .paths import IS_WINDOWS, data_dir, recordings_dir
 from .subtitles import burn_subtitles
 
 
+# The page's looks (ui/index.html draws each one); "system" follows Windows' light or dark mode.
+THEMES = ("system", "dark", "light", "midnight", "ocean", "forest", "grape", "sunset", "paper", "contrast")
+
+
 class Api:
     def __init__(self) -> None:
         self._window = None
@@ -94,10 +98,10 @@ class Api:
         self._settings_path.write_text(json.dumps(settings), encoding="utf-8")
 
     def save_preferences(self, language: str | None = None, tour_seen: bool | None = None,
-                         labels: dict | None = None, subtitles: bool | None = None) -> dict:
+                         labels: dict | None = None, subtitles: bool | None = None, theme: str | None = None) -> dict:
         """The page's own preferences: its language ("en" or "es"), whether the tour was seen, the names
-        the user gave the audio sources (an empty one goes back to the default), and whether recordings
-        get a subtitled copy of their video."""
+        the user gave the audio sources (an empty one goes back to the default), whether recordings
+        get a subtitled copy of their video, and its theme (one of THEMES)."""
         changes = {}
         if language in ("en", "es"):
             changes["language"] = language
@@ -107,6 +111,8 @@ class Api:
             changes["labels"] = _clean_labels(labels)
         if subtitles is not None:
             changes["subtitles"] = bool(subtitles)
+        if theme in THEMES:
+            changes["theme"] = theme
         if changes:
             self._save_settings(**changes)
         return {"ok": True}
@@ -136,7 +142,8 @@ class Api:
                          "language": settings.get("language"),  # None: the page follows the system's
                          "tour_seen": bool(settings.get("tour_seen", False)),
                          "labels": _clean_labels(settings.get("labels") or {}),  # only the ones the user named
-                         "subtitles": bool(settings.get("subtitles", False))},
+                         "subtitles": bool(settings.get("subtitles", False)),
+                         "theme": settings.get("theme") if settings.get("theme") in THEMES else "system"},
             "recordings_dir": str(recordings_dir()),
         }
 

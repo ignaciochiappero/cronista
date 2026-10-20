@@ -78,3 +78,11 @@ def test_the_subtitled_video_is_made_in_the_background_with_the_labels(api, tmp_
 def test_copied_text_says_who_said_what(api, tmp_path):
     recording_id, _ = add_call(api, tmp_path)
     assert api.copy_text(recording_id) == {"text": "Me: Let's start.\nOthers: Sure."}
+
+
+def test_the_theme_is_one_of_the_known_ones(api):
+    assert api.state()["settings"]["theme"] == "system"
+    api.save_preferences(theme="midnight")
+    assert api.state()["settings"]["theme"] == "midnight"
+    api.save_preferences(theme="neon-pink")  # not one of the page's themes: left as it was
+    assert api.state()["settings"]["theme"] == "midnight"
