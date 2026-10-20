@@ -10,14 +10,14 @@ Cronista records your main screen, your microphone and the sound of your compute
 
 <picture>
   <source srcset="docs/tour.avif" type="image/avif" />
-  <img src="docs/screenshot.png" alt="A tour of the app: naming the computer's voice, the whole screen being recorded, the live transcript saying who spoke, the subtitled video, searching the history, and the Word and PDF export." />
+  <img src="docs/screenshot.png" alt="A tour of the app: naming the computer's voice, the whole screen being recorded, the live transcript saying who spoke, the subtitled video, searching the history, the Word and PDF export, and the themes." />
 </picture>
 
 ![Cronista with a recording open: its transcript, the recording controls, and the history](docs/screenshot.png)
 
 ## Install
 
-Download **Cronista-Setup-0.5.0.exe** from the [Releases page](https://github.com/ignaciochiappero/cronista/releases/latest) and run it. It installs for your user only, without administrator rights, and adds a Start menu shortcut. Everything it needs comes inside: the speech model and FFmpeg.
+Download **Cronista-Setup-0.6.0.exe** from the [Releases page](https://github.com/ignaciochiappero/cronista/releases/latest) and run it. It installs for your user only, without administrator rights, and adds a Start menu shortcut. Everything it needs comes inside: the speech model and FFmpeg.
 
 The installer is not code-signed yet, so Windows SmartScreen warns about it: choose **More info**, then **Run anyway**. [SECURITY.md](SECURITY.md) says what the app records, where it keeps it, and how to check your download.
 
@@ -43,7 +43,7 @@ The first time, a short guide shows you around. **Guide** brings it back.
 | **Rename it** | Click a recording's title (or **Rename**, or double-click it in the history). Enter saves, Esc cancels. |
 | **Export it** | **Word** and **PDF** write the transcript with its timestamps and who spoke, next to the video. |
 | **Watch it** | **Play** opens the video in your usual player; **Show in folder** opens its folder. |
-| **Your way** | English or Spanish, with **EN / ES** at the top. Light or dark, following Windows. |
+| **Your way** | English or Spanish, with **EN / ES** at the top. Ten themes in **Theme**: System (light or dark, as Windows is), Dark, Light, Midnight, Ocean, Forest, Grape, Sunset, Paper and High contrast. |
 
 Each recording has its own folder in `Videos\Cronista`:
 

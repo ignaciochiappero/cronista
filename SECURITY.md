@@ -21,7 +21,7 @@ Please report it privately, not in a public issue: use **Report a vulnerability*
 |-------|------|
 | `Videos\Cronista\<date and time>\` | One folder per recording: `recording.mp4`, `transcript.srt`, `transcript.txt`, `recorder.log` (FFmpeg's messages while recording), and `transcript.docx`, `transcript.pdf` or `recording-subtitled.mp4` once you make them. While a recording runs, the folder also holds its parts (`screen.mp4`, `audio.m4a`) and the audio the speech model reads (`audio-16k*.f32`, one file per audio source); they are deleted when it stops. While a subtitled copy is made, `subtitles.ass` is there too, and is deleted when it is done. |
 | `%LOCALAPPDATA%\Cronista\library.db` | The history: each recording's title, date, length, size, folder, the names of its audio sources, and its full transcript (with which source said each phrase), which is what the search looks through. |
-| `%LOCALAPPDATA%\Cronista\settings.json` | The microphone you chose (its Windows device id), the quality, whether computer sound is on, the names you gave the two audio sources, whether recordings get a subtitled copy, the language, and whether the guide was shown. |
+| `%LOCALAPPDATA%\Cronista\settings.json` | The microphone you chose (its Windows device id), the quality, whether computer sound is on, the names you gave the two audio sources, whether recordings get a subtitled copy, the theme, the language, and whether the guide was shown. |
 | `%LOCALAPPDATA%\Cronista\cronista.log` | A line each time the app starts, and the details of any error. Not what was said. |
 
 None of these files are encrypted. The recordings and the history hold what was said in them: anyone who can read your user profile can read them too.

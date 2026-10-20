@@ -10,14 +10,14 @@ Cronista graba tu pantalla principal, tu micrófono y el sonido de tu computador
 
 <picture>
   <source srcset="docs/tour-es.avif" type="image/avif" />
-  <img src="docs/screenshot-es.png" alt="Un recorrido por la app: nombrar la voz de la computadora, toda la pantalla grabándose, la transcripción en vivo diciendo quién habló, el video subtitulado, buscar en el historial y exportar a Word y PDF." />
+  <img src="docs/screenshot-es.png" alt="Un recorrido por la app: nombrar la voz de la computadora, toda la pantalla grabándose, la transcripción en vivo diciendo quién habló, el video subtitulado, buscar en el historial, exportar a Word y PDF, y los temas." />
 </picture>
 
 ![Cronista con una grabación abierta: su transcripción, los controles de grabación y el historial](docs/screenshot-es.png)
 
 ## Instalación
 
-Descarga **Cronista-Setup-0.5.0.exe** desde la [página de versiones](https://github.com/ignaciochiappero/cronista/releases/latest) y ejecútalo. Se instala solo para tu usuario, sin permisos de administrador, y agrega un acceso en el menú Inicio. Trae todo lo que necesita: el modelo de voz y FFmpeg.
+Descarga **Cronista-Setup-0.6.0.exe** desde la [página de versiones](https://github.com/ignaciochiappero/cronista/releases/latest) y ejecútalo. Se instala solo para tu usuario, sin permisos de administrador, y agrega un acceso en el menú Inicio. Trae todo lo que necesita: el modelo de voz y FFmpeg.
 
 El instalador todavía no está firmado, así que Windows SmartScreen muestra un aviso: elige **Más información** y después **Ejecutar de todas formas**. [SECURITY.md](SECURITY.md) (en inglés) explica qué graba la app, dónde lo guarda y cómo verificar la descarga.
 
@@ -43,7 +43,7 @@ La primera vez, una guía corta te muestra la app. El botón **Guía** la vuelve
 | **Renombrar** | Haz clic en el título de una grabación (o en **Renombrar**, o doble clic en el historial). Enter guarda, Esc cancela. |
 | **Exportar** | **Word** y **PDF** escriben la transcripción con sus marcas de tiempo y quién habló, junto al video. |
 | **Ver** | **Reproducir** abre el video en tu reproductor; **Carpeta** abre su carpeta. |
-| **A tu manera** | Español o inglés, con **EN / ES** arriba. Claro u oscuro, según Windows. |
+| **A tu manera** | Español o inglés, con **EN / ES** arriba. Diez temas en **Tema**: Sistema (claro u oscuro, según Windows), Oscuro, Claro, Medianoche, Océano, Bosque, Uva, Atardecer, Papel y Alto contraste. |
 
 Cada grabación tiene su carpeta en `Videos\Cronista`:
 
