@@ -4,7 +4,7 @@
 
 **Records your screen and writes down what is said, live.**
 
-Cronista records your main screen, your microphone and the sound of your computer, and writes down what is said while you speak, in English or Spanish, telling you apart from the people on the call. When you stop, a final pass over the whole recording writes the transcript that is saved next to the video, and, if you want, a copy of the video with subtitles. It all happens on your computer: the speech model runs on it, and nothing is sent anywhere.
+Cronista records your main screen, your microphone and the sound of your computer, and writes down what is said while you speak, in English or Spanish, telling you apart from the people on the call. When you stop, a final pass over the whole recording writes the transcript that is saved next to the video, and, if you want, a copy of the video with subtitles. Drop an audio or video file on it, in any format, and it writes that file's transcript too. It all happens on your computer: the speech model runs on it, and nothing is sent anywhere.
 
 [Leer en español](README.es.md)
 
@@ -17,7 +17,7 @@ Cronista records your main screen, your microphone and the sound of your compute
 
 ## Install
 
-Download **Cronista-Setup-0.6.0.exe** from the [Releases page](https://github.com/ignaciochiappero/cronista/releases/latest) and run it. It installs for your user only, without administrator rights, and adds a Start menu shortcut. Everything it needs comes inside: the speech model and FFmpeg.
+Download **Cronista-Setup-0.7.0.exe** from the [Releases page](https://github.com/ignaciochiappero/cronista/releases/latest) and run it. It installs for your user only, without administrator rights, and adds a Start menu shortcut. Everything it needs comes inside: the speech model and FFmpeg.
 
 The installer is not code-signed yet, so Windows SmartScreen warns about it: choose **More info**, then **Run anyway**. [SECURITY.md](SECURITY.md) says what the app records, where it keeps it, and how to check your download.
 
@@ -37,6 +37,7 @@ The first time, a short guide shows you around. **Guide** brings it back.
 |---|---|
 | **Record** | Your whole main screen at its own resolution, your microphone, and the computer's sound, mixed together. Up to four hours per recording. |
 | **Read it live** | The words show up as they are said. The saved transcript comes from a final pass over the whole recording, which is more accurate. |
+| **Transcribe a file** | Drop audio or video anywhere on the window, in any format FFmpeg reads (MP3, WAV, M4A, OGG, FLAC, MP4, MKV, MOV, WebM and more), or click **Transcribe a file**. Its transcript shows up as it is written, and it joins the history like a recording; files dropped together wait their turn. The file is not copied: **Play** and **Show in folder** open it where it is, and **Delete** removes only its transcript. |
 | **Know who said it** | Your microphone and the computer's sound are transcribed apart, so every line says whether it was you or the call. Name each with a click on its label; a recording's labels can be renamed later from its transcript. |
 | **Subtitle it** | **Subtitled video** makes `recording-subtitled.mp4`, with the transcript and who said each line on screen. Turn on **Subtitled copy** to get it every time a recording stops. |
 | **Find it** | Search the history by anything that was said. Results come as you type. |
@@ -44,6 +45,11 @@ The first time, a short guide shows you around. **Guide** brings it back.
 | **Export it** | **Word** and **PDF** write the transcript with its timestamps and who spoke, next to the video. |
 | **Watch it** | **Play** opens the video in your usual player; **Show in folder** opens its folder. |
 | **Your way** | English or Spanish, with **EN / ES** at the top. Ten themes in **Theme**: System (light or dark, as Windows is), Dark, Light, Midnight, Ocean, Forest, Grape, Sunset, Paper and High contrast. |
+
+<picture>
+  <source srcset="docs/import.avif" type="image/avif" />
+  <img src="docs/import.jpg" alt="Transcribing a file: an interview dragged from a folder onto Cronista, its transcript written as it goes with how long is left, and the result in the history." />
+</picture>
 
 Each recording has its own folder in `Videos\Cronista`:
 
@@ -55,6 +61,8 @@ Each recording has its own folder in `Videos\Cronista`:
 | `transcript.docx`, `transcript.pdf` | Once you export them |
 | `recording-subtitled.mp4` | The video with subtitles, once you make it |
 | `recorder.log` | What FFmpeg reported while recording, for when something goes wrong |
+
+A transcribed file gets a folder there too, with its `transcript.srt` and `transcript.txt`, and its Word, PDF or subtitled copy (`<file name>-subtitled.mp4`) once you make them. The file itself stays where it was.
 
 **Computer sound** follows Windows' default playback device, so plugging in headphones mid-recording is fine. With speakers instead of headphones, the microphone also picks up that sound about 40 ms later, which sounds like an echo in the video; the transcript leaves out the lines where the microphone only repeated the call, but headphones keep both clean.
 
@@ -76,6 +84,7 @@ Each recording has its own folder in `Videos\Cronista`:
 | `cronista/engine/voices.py` | Who said it: each phrase's source, the labels, and the microphone's echoes of the computer, left out | new |
 | `cronista/engine/voice_activity.py`, `local_agreement.py` | Phrase detection and steady live text | bavel |
 | `cronista/engine/final_pass.py` | The saved transcript, in pause-aligned chunks of about 90 s, skipping the silent ones | the spike, plus chunking |
+| `cronista/importer.py` | A dropped file: what FFmpeg reports on it (length, sound, pictures), its first audio stream decoded to 16 kHz, and the final pass over it in 30 s chunks whose lines are shown as they come | new; the drop, as in escriba's launcher |
 | `cronista/library.py` | History with full-text search (SQLite FTS5) | escriba's `database.py` |
 | `cronista/export.py`, `language.py` | SRT, plain text, Word, and PDF (reportlab, with Segoe UI embedded), headed in the page's language, with who said what | escriba's `document.py`, plus the PDF |
 | `cronista/subtitles.py` | The subtitled copy: the transcript as ASS, drawn by FFmpeg's libass and re-encoded on the graphics card | new |
@@ -105,7 +114,7 @@ FFmpeg must be on PATH (`winget install ffmpeg`). The speech model lives in `mod
 .\.venv\Scripts\python.exe tools\make_icon.py                 # only if the logo changed
 $env:FFMPEG_EXE = "C:\path\to\ffmpeg-n9.0-latest-win64-lgpl-9.0\bin\ffmpeg.exe"   # an LGPL build, see below
 .\.venv\Scripts\pyinstaller.exe cronista.spec --noconfirm --clean
-.\dist\Cronista\Cronista.exe --self-test                      # records 5 s with computer sound, checks, deletes; exit code 0 = fine
+.\dist\Cronista\Cronista.exe --self-test                      # records 5 s with computer sound, transcribes it as a dropped file, checks, deletes; exit code 0 = fine
 & "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\cronista.iss
 ```
 

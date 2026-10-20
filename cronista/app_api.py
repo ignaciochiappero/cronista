@@ -12,16 +12,19 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 import traceback
 from datetime import datetime
 from pathlib import Path
 
+from .engine.ffmpeg_locator import find_ffmpeg
 from .engine.recorders import QUALITY, RecorderSettings, default_recorder, pick_microphone
 from .engine.session import RecordingSession
 from .engine.stt_engine import load_parakeet
 from .engine.transcript import TranscriptionSegment
 from .engine.voices import SOURCES, line, speakers
 from .export import write_pdf, write_text_files, write_word
+from .importer import MEDIA_PATTERNS, Cancelled, ImportFailed, transcribe_file
 from .language import default_labels, default_title, language_or_default
 from .library import Library
 from .paths import IS_WINDOWS, data_dir, recordings_dir
@@ -30,6 +33,8 @@ from .subtitles import burn_subtitles
 
 # The page's looks (ui/index.html draws each one); "system" follows Windows' light or dark mode.
 THEMES = ("system", "dark", "light", "midnight", "ocean", "forest", "grape", "sunset", "paper", "contrast")
+# Of a dropped file's progress bar, the part for reading its sound; the rest is the transcript.
+READING_SHARE = 0.1
 
 
 class Api:
@@ -49,6 +54,11 @@ class Api:
         self._phase = "idle"  # idle, listening, recording, finishing
         self._lock = threading.Lock()
         self._close_when_saved = False
+        # Files dropped on the window or picked, transcribed one at a time, never while recording.
+        self._import_queue: list[Path] = []
+        self._importing: dict | None = None  # the one being transcribed, as the page shows it
+        self._importer: threading.Thread | None = None
+        self._import_stop = threading.Event()
         try:
             self._recorder = default_recorder()
         except RuntimeError as error:
@@ -58,6 +68,7 @@ class Api:
     def _attach(self, window) -> None:
         self._window = window
         threading.Thread(target=self._load_model, daemon=True).start()
+        threading.Thread(target=self._listen_for_drops, args=(window,), daemon=True).start()
         # Started from a hidden or minimized console, Windows applies that state to the window's
         # first appearance, and WebView2 lays the page out at zero size: blank once restored.
         # Restoring and changing the size once makes WebView2 lay the page out again.
@@ -145,6 +156,7 @@ class Api:
                          "subtitles": bool(settings.get("subtitles", False)),
                          "theme": settings.get("theme") if settings.get("theme") in THEMES else "system"},
             "recordings_dir": str(recordings_dir()),
+            "importing": dict(self._importing) if self._importing else None,
         }
 
     # --- recording ----------------------------------------------------------------------------
@@ -155,6 +167,8 @@ class Api:
         with self._lock:
             if self._phase != "idle":
                 return {"error": "A recording is already running."}
+            if self._importing is not None or self._import_queue:
+                return {"error": "A file is being transcribed. Cancel it to record."}
             if self._recorder is None:
                 return {"error": self._recorder_error}
             if self._model is None:
@@ -227,13 +241,172 @@ class Api:
                 self._window.destroy()
 
     def _on_closing(self) -> bool:
-        """Closing while recording first saves the recording, then closes."""
-        if self._phase == "idle":
+        """Closing while recording first saves the recording, then closes. A file being transcribed is
+        cancelled first, so no half-made transcript stays behind (it can be dropped again)."""
+        if self._phase == "idle" and self._importer is None:
             return True
         self._close_when_saved = True
-        self._emit("notice", {"message": "Saving the recording before closing…"})
-        self.stop()
+        if self._phase != "idle":
+            self._emit("notice", {"message": "Saving the recording before closing…"})
+            self.stop()
+        else:
+            self.cancel_import()
         return False
+
+    # --- transcribing a file ------------------------------------------------------------------
+    def pick_files(self, language: str | None = None) -> dict:
+        """Windows' file dialog, for audio and video: the files chosen are transcribed one after another."""
+        import webview
+
+        spanish = language_or_default(language or self._load_settings().get("language")) == "es"
+        kinds = (f"{'Audio y video' if spanish else 'Audio and video'} ({MEDIA_PATTERNS})",
+                 f"{'Todos los archivos' if spanish else 'All files'} (*.*)")
+        paths = self._window.create_file_dialog(webview.FileDialog.OPEN, allow_multiple=True, file_types=kinds)
+        if not paths:
+            return {"cancelled": True}
+        return self._import_files(list(paths))
+
+    def _import_files(self, paths: list[str]) -> dict:
+        """Transcribes these files one after another, folders left out: "import" events say how the one
+        being transcribed goes, then "imported", "import-error" or "import-cancelled" how it ended."""
+        files = [Path(path) for path in paths if path and Path(path).is_file()]
+        with self._lock:
+            if self._phase != "idle":
+                return {"error": "Stop the recording first, then drop the file again."}
+            if self._model is None:
+                return {"error": self._model_state.get("message") or "The speech model is still loading."}
+            ffmpeg = self._ffmpeg()
+            if not ffmpeg:
+                return {"error": "ffmpeg was not found. Install it with: winget install ffmpeg"}
+            if not files:
+                return {"error": "Drop an audio or video file, not a folder."}
+            self._import_queue += files
+            if self._importer is None:
+                self._importer = threading.Thread(target=self._import_all, args=(ffmpeg,), daemon=True)
+                self._importer.start()
+        self._update_import()  # the one being transcribed, if any, has more waiting now
+        return {"ok": True, "queued": len(files)}
+
+    def cancel_import(self) -> dict:
+        """Stops the file being transcribed and forgets the ones waiting."""
+        with self._lock:
+            self._import_queue.clear()
+            if self._importing is not None:
+                self._import_stop.set()
+        return {"ok": True}
+
+    def _import_all(self, ffmpeg: str) -> None:
+        """The files waiting, one at a time, in a thread of their own."""
+        while True:
+            with self._lock:
+                if not self._import_queue:
+                    self._importer = None
+                    break
+                path = self._import_queue.pop(0)
+                self._import_stop.clear()
+                self._importing = {"name": path.name, "stage": "reading", "progress": 0.0, "done": 0.0,
+                                   "total": 0.0, "eta": None, "waiting": len(self._import_queue)}
+                started = dict(self._importing)  # the page shows it from the start
+            self._emit("import", started)
+            self._import_one(ffmpeg, path)
+        if self._close_when_saved and self._window is not None and self._phase == "idle":
+            self._window.destroy()
+
+    def _import_one(self, ffmpeg: str, path: Path) -> None:
+        name = path.name
+        folder = _new_folder(recordings_dir())
+        pace: list[float] = []  # when the transcript began, and how many seconds of the file were done then
+
+        def progress(stage: str, done: float, total: float) -> None:
+            share = min(done / total, 1.0) if total > 0 else 0.0
+            eta = None
+            if stage == "reading":
+                overall = READING_SHARE * share
+            else:
+                overall = READING_SHARE + (1 - READING_SHARE) * share
+                now = time.monotonic()
+                if not pace:
+                    pace[:] = [now, done]
+                elif done > pace[1]:
+                    eta = round((total - done) * (now - pace[0]) / (done - pace[1]))
+            self._update_import(stage=stage, progress=round(overall, 4), done=round(done, 1), total=round(total, 1),
+                                eta=eta)
+
+        def lines(segments: list[TranscriptionSegment]) -> None:
+            self._update_import(lines=[{"start": s.start, "end": s.end, "text": s.text} for s in segments])
+
+        try:
+            result = transcribe_file(self._model, ffmpeg, path, folder, progress=progress, lines=lines,
+                                     stopped=self._import_stop.is_set)
+            self._update_import(stage="saving", progress=1.0, eta=0)
+            write_text_files(result.segments, folder)
+            recording_id = self._library.add(
+                title=path.stem.strip()[:120] or name,
+                created_at=datetime.now().isoformat(timespec="seconds"),
+                duration_seconds=round(result.duration, 1),
+                size_bytes=path.stat().st_size,
+                folder=str(folder),
+                video_path=str(path),
+                transcript=" ".join(segment.text for segment in result.segments),
+                segments=[{"start": s.start, "end": s.end, "text": s.text} for s in result.segments],
+                kind="video" if result.has_video else "audio",
+            )
+            ended = ("imported", {"id": recording_id, "name": name})
+        except Cancelled:
+            ended = ("import-cancelled", {"name": name})
+        except ImportFailed as error:
+            ended = ("import-error", {"name": name, "message": str(error)})
+        except Exception as error:  # noqa: BLE001 - shown to the user, details in the log
+            traceback.print_exc()
+            ended = ("import-error", {"name": name, "message": f"Transcribing the file failed: {error}"})
+        if ended[0] != "imported":
+            shutil.rmtree(folder, ignore_errors=True)  # only the folder made for it, never the file
+        with self._lock:
+            self._importing = None
+        self._emit(*ended)
+
+    def _update_import(self, **changes) -> None:
+        """Merges what changed into the file being transcribed and tells the page, with how many files
+        wait after it; `lines` go in the event only."""
+        lines = changes.pop("lines", None)
+        with self._lock:
+            if self._importing is None:
+                return
+            self._importing.update(changes, waiting=len(self._import_queue))
+            payload = dict(self._importing)
+        if lines:
+            payload["lines"] = lines
+        self._emit("import", payload)
+
+    def _on_drop(self, event: dict) -> None:
+        """Files dropped on the window, with their full paths: pywebview adds them, as in escriba's launcher.
+        A drop that cannot be taken says why with "import-refused", which ends nothing that is running."""
+        files = (event.get("dataTransfer") or {}).get("files") or []
+        paths = [file["pywebviewFullPath"] for file in files if file.get("pywebviewFullPath")]
+        result = self._import_files(paths) if paths else {
+            "error": "The dropped file could not be read. Choose it with Transcribe a file."}
+        if "error" in result:
+            self._emit("import-refused", {"message": result["error"]})
+
+    def _listen_for_drops(self, window) -> None:
+        """Subscribes to files dropped on the page once it has loaded, as escriba's launcher does: WebView2
+        gives a dropped file's full path only to pywebview's DOM events. If this fails, the page still has
+        the file dialog."""
+        from webview.dom import DOMEventHandler
+
+        if not window.events.loaded.wait(60):
+            return
+        for _ in range(20):  # pywebview's bridge comes with the page, a moment after it loads
+            try:
+                window.dom.document.on("drop", DOMEventHandler(self._on_drop, prevent_default=True))
+                self._emit("drop-ready", {})
+                return
+            except Exception:  # noqa: BLE001 - tried again; in the end the page keeps the file dialog only
+                time.sleep(0.5)
+        traceback.print_exc()
+
+    def _ffmpeg(self) -> str | None:
+        return getattr(self._recorder, "ffmpeg", None) or find_ffmpeg()
 
     # --- library ------------------------------------------------------------------------------
     def recordings(self, search: str = "") -> list[dict]:
@@ -258,11 +431,14 @@ class Api:
         return {"ok": True, "labels": record["labels"]}
 
     def subtitled_video(self, recording_id: str, language: str | None = None) -> dict:
-        """Starts making recording-subtitled.mp4; "subtitled" (or "error") says when it is done."""
+        """Starts making the subtitled copy (recording-subtitled.mp4, or "<file>-subtitled.mp4" for a
+        dropped video); "subtitled" (or "error") says when it is done."""
         record = self._library.get(recording_id)
         if not record:
             return {"error": "Recording not found."}
-        if self._recorder is None or not getattr(self._recorder, "ffmpeg", None):
+        if record["kind"] == "audio":
+            return {"error": "This file has no pictures to put the subtitles on."}
+        if not self._ffmpeg():
             return {"error": self._recorder_error or "ffmpeg was not found. Install it with: winget install ffmpeg"}
         if not Path(record["video_path"]).exists():
             return {"error": "The video file is no longer there."}
@@ -283,7 +459,8 @@ class Api:
                 record = self._library.get(recording_id)
                 segments = _segments(record)
                 names = speakers(segments, {**default_labels(language), **record["labels"]})
-                path = burn_subtitles(self._recorder.ffmpeg, Path(record["folder"]), segments, names)
+                dropped = {"source": Path(record["video_path"])} if record["kind"] == "video" else {}
+                path = burn_subtitles(self._ffmpeg(), Path(record["folder"]), segments, names, **dropped)
                 if reveal and IS_WINDOWS:
                     subprocess.Popen(["explorer", "/select,", str(path)])
                 self._emit("subtitled", {"id": recording_id, "path": str(path)})
@@ -356,7 +533,8 @@ class Api:
         names = speakers(segments, {**default_labels(language), **record["labels"]})
         try:
             path = write(segments, Path(record["folder"]) / file_name, title=record["title"],
-                         recorded_at=datetime.fromisoformat(record["created_at"]), language=language, names=names)
+                         recorded_at=datetime.fromisoformat(record["created_at"]), language=language, names=names,
+                         from_file=record["kind"] != "recording")
         except PermissionError:
             return {"error": f"{file_name} is open in another program. Close it and try again."}
         if IS_WINDOWS:
@@ -383,6 +561,19 @@ class Api:
             subprocess.Popen(["open", path])
         else:
             subprocess.Popen(["xdg-open", path])
+
+
+def _new_folder(root: Path) -> Path:
+    """A new folder named for this moment, like a recording's ("-2", "-3"... when two start in the same second)."""
+    stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    folder, number = root / stamp, 1
+    while True:
+        try:
+            folder.mkdir(parents=True)
+            return folder
+        except FileExistsError:
+            number += 1
+            folder = root / f"{stamp}-{number}"
 
 
 def _clean_labels(labels: dict) -> dict[str, str]:

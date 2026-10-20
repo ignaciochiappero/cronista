@@ -4,7 +4,7 @@
 
 **Graba tu pantalla y escribe lo que se dice, en vivo.**
 
-Cronista graba tu pantalla principal, tu micrófono y el sonido de tu computadora, y escribe lo que se dice mientras hablas, en español o en inglés, distinguiéndote de quienes están en la llamada. Al detener, una pasada final sobre toda la grabación escribe la transcripción que se guarda junto al video y, si quieres, una copia del video con subtítulos. Todo ocurre en tu computadora: el modelo de voz corre en ella y nada se envía a ningún lado.
+Cronista graba tu pantalla principal, tu micrófono y el sonido de tu computadora, y escribe lo que se dice mientras hablas, en español o en inglés, distinguiéndote de quienes están en la llamada. Al detener, una pasada final sobre toda la grabación escribe la transcripción que se guarda junto al video y, si quieres, una copia del video con subtítulos. Si sueltas sobre ella un archivo de audio o video, en cualquier formato, también escribe su transcripción. Todo ocurre en tu computadora: el modelo de voz corre en ella y nada se envía a ningún lado.
 
 [Read in English](README.md)
 
@@ -17,7 +17,7 @@ Cronista graba tu pantalla principal, tu micrófono y el sonido de tu computador
 
 ## Instalación
 
-Descarga **Cronista-Setup-0.6.0.exe** desde la [página de versiones](https://github.com/ignaciochiappero/cronista/releases/latest) y ejecútalo. Se instala solo para tu usuario, sin permisos de administrador, y agrega un acceso en el menú Inicio. Trae todo lo que necesita: el modelo de voz y FFmpeg.
+Descarga **Cronista-Setup-0.7.0.exe** desde la [página de versiones](https://github.com/ignaciochiappero/cronista/releases/latest) y ejecútalo. Se instala solo para tu usuario, sin permisos de administrador, y agrega un acceso en el menú Inicio. Trae todo lo que necesita: el modelo de voz y FFmpeg.
 
 El instalador todavía no está firmado, así que Windows SmartScreen muestra un aviso: elige **Más información** y después **Ejecutar de todas formas**. [SECURITY.md](SECURITY.md) (en inglés) explica qué graba la app, dónde lo guarda y cómo verificar la descarga.
 
@@ -37,6 +37,7 @@ La primera vez, una guía corta te muestra la app. El botón **Guía** la vuelve
 |---|---|
 | **Grabar** | Toda tu pantalla principal en su resolución, tu micrófono y el sonido de la computadora, mezclados. Hasta cuatro horas por grabación. |
 | **Leer en vivo** | Las palabras aparecen a medida que se dicen. La transcripción que se guarda sale de una pasada final sobre toda la grabación, que es más precisa. |
+| **Transcribir un archivo** | Suelta un audio o video en cualquier parte de la ventana, en cualquier formato que lea FFmpeg (MP3, WAV, M4A, OGG, FLAC, MP4, MKV, MOV, WebM y más), o haz clic en **Transcribir un archivo**. La transcripción aparece a medida que se escribe y queda en el historial como una grabación; si sueltas varios, esperan su turno. El archivo no se copia: **Reproducir** y **Carpeta** lo abren donde está, y **Eliminar** quita solo su transcripción. |
 | **Saber quién habló** | Tu micrófono y el sonido de la computadora se transcriben por separado, así cada línea dice si fuiste tú o la llamada. Ponle nombre a cada uno con un clic en su etiqueta; las etiquetas de una grabación se pueden cambiar después desde su transcripción. |
 | **Subtitular** | **Video subtitulado** hace `recording-subtitled.mp4`, con la transcripción y quién dijo cada línea en pantalla. Activa **Copia subtitulada** para que se haga cada vez que termina una grabación. |
 | **Encontrar** | Busca en el historial por cualquier cosa que se dijo. Los resultados aparecen mientras escribes. |
@@ -44,6 +45,11 @@ La primera vez, una guía corta te muestra la app. El botón **Guía** la vuelve
 | **Exportar** | **Word** y **PDF** escriben la transcripción con sus marcas de tiempo y quién habló, junto al video. |
 | **Ver** | **Reproducir** abre el video en tu reproductor; **Carpeta** abre su carpeta. |
 | **A tu manera** | Español o inglés, con **EN / ES** arriba. Diez temas en **Tema**: Sistema (claro u oscuro, según Windows), Oscuro, Claro, Medianoche, Océano, Bosque, Uva, Atardecer, Papel y Alto contraste. |
+
+<picture>
+  <source srcset="docs/import-es.avif" type="image/avif" />
+  <img src="docs/import-es.jpg" alt="Transcribir un archivo: una entrevista arrastrada desde una carpeta a Cronista, su transcripción escribiéndose con lo que falta, y el resultado en el historial." />
+</picture>
 
 Cada grabación tiene su carpeta en `Videos\Cronista`:
 
@@ -55,6 +61,8 @@ Cada grabación tiene su carpeta en `Videos\Cronista`:
 | `transcript.docx`, `transcript.pdf` | Cuando los exportas |
 | `recording-subtitled.mp4` | El video con subtítulos, cuando lo haces |
 | `recorder.log` | Lo que informó FFmpeg durante la grabación, por si algo falla |
+
+Un archivo transcrito también tiene su carpeta ahí, con su `transcript.srt` y su `transcript.txt`, y su Word, su PDF o su copia subtitulada (`<nombre del archivo>-subtitled.mp4`) cuando los haces. El archivo en sí queda donde estaba.
 
 **Sonido de la PC** sigue al dispositivo de reproducción predeterminado de Windows, así que puedes conectar auriculares en medio de una grabación. Con altavoces en lugar de auriculares, el micrófono también capta ese sonido unos 40 ms después, y en el video se oye como un eco; la transcripción deja afuera las líneas en que el micrófono solo repitió la llamada, pero con auriculares las dos fuentes quedan limpias.
 

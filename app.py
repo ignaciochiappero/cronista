@@ -34,7 +34,15 @@ def self_test() -> int:
 
     api = Api()
     notices: list[str] = []  # e.g. the computer's sound could not be recorded
-    api._emit = lambda kind, payload: notices.append(payload["message"]) if kind == "notice" else None
+    endings: list[tuple[str, dict]] = []  # how the file given to transcribe ended
+
+    def emit(kind: str, payload: dict) -> None:
+        if kind == "notice":
+            notices.append(payload["message"])
+        elif kind in ("imported", "import-error", "import-cancelled"):
+            endings.append((kind, payload))
+
+    api._emit = emit
     api._model_state = {"state": "loading"}
     api._load_model()
     state = api.state()
@@ -66,7 +74,9 @@ def self_test() -> int:
           f"{len(record['segments'])} segments, notices {notices or 'none'} -> {'OK' if ok else 'FAILED'}")
     exported = export_check(record, api._recorder.ffmpeg)
     print(f"self-test: exported {exported or 'nothing'}")
-    ok = ok and len(exported) == 3
+    transcribed = import_check(api, endings, record["video_path"])
+    print(f"self-test: transcribed the video as a dropped file: {transcribed}")
+    ok = ok and len(exported) == 3 and transcribed == "imported"
     if ok:
         api.delete(record["id"])
         return 0
@@ -108,6 +118,25 @@ def export_check(record: dict, ffmpeg: str) -> list[str]:
     except RuntimeError as error:
         print(f"self-test: {error}")
     return written
+
+
+def import_check(api, endings: list, video: str) -> str:
+    """Transcribes the recording's video as if it had been dropped on the window, which proves that
+    the bundled ffmpeg reports on a file and decodes its sound. Removes that transcript from the
+    history again (its folder only: the video stays). Says how it ended: "imported", or why not."""
+    result = api._import_files([video])
+    if "error" in result:
+        return result["error"]
+    deadline = time.monotonic() + 120
+    while not endings and time.monotonic() < deadline:
+        time.sleep(0.2)
+    if not endings:
+        return "no answer in 120 s"
+    kind, payload = endings[0]
+    if kind == "imported":
+        api.delete(payload["id"])
+        return kind
+    return f"{kind}: {payload.get('message', '')}"
 
 
 def main() -> int:
