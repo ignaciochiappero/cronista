@@ -23,8 +23,10 @@ class FakeRecorder:
     output_name = "recording.mp4"
     after_first_frame = b"-"  # the fakes ignore it, like ffmpeg ignores keys it doesn't know
 
-    def __init__(self, wav: Path, *, audio_sources: bool = False, screen_process: bool = False) -> None:
+    def __init__(self, wav: Path, *, second_wav: Path | None = None, audio_sources: bool = False,
+                 screen_process: bool = False) -> None:
         self.wav = wav
+        self.second_wav = second_wav  # on a second channel, as the computer's sound comes
         self.with_sources = audio_sources
         self.with_screen = screen_process
 
@@ -41,12 +43,16 @@ class FakeRecorder:
                  "--out", str(folder / self.output_name)]
         for source in sources:
             audio += ["--audio", source.path]
+        channels = 1
+        if self.second_wav:
+            audio += ["--wav2", str(self.second_wav)]
+            channels = 2
         if not self.with_screen:
             if sources:
                 audio += ["--first-frame-after", "0.3"]
-            return [RecorderProcess("recorder", audio, speech=True)]
+            return [RecorderProcess("recorder", audio, speech=True, speech_channels=channels)]
         screen = [sys.executable, str(HERE / "fake_screen.py"), "--out", str(folder / "screen.part")]
-        return [RecorderProcess("screen", screen), RecorderProcess("audio", audio, speech=True)]
+        return [RecorderProcess("screen", screen), RecorderProcess("audio", audio, speech=True, speech_channels=channels)]
 
     def finish(self, folder: Path) -> None:
         if self.with_screen:
@@ -97,7 +103,32 @@ def test_records_transcribes_live_and_finishes_with_the_final_pass(model, tmp_pa
     assert "prueba de transcripción en vivo" in result.transcript.lower()
     assert result.duration_seconds > 20
     assert result.size_bytes > 0
-    assert not session.tape_path.exists()  # the raw audio is gone once the final pass is done
+    assert not any(path.exists() for path in session.tape_paths)  # the raw audio is gone once the final pass is done
+    assert {segment.source for segment in result.segments} == {"mic"}
+
+
+@pytest.mark.slow
+def test_each_source_is_transcribed_apart_and_says_where_it_came_from(model, tmp_path):
+    # The microphone speaks Spanish on channel 0 while the computer plays English on channel 1.
+    events = Events()
+    recorder = FakeRecorder(DATA / "es.wav", second_wav=DATA / "en.wav")
+    session = RecordingSession(model, recorder, RecorderSettings(), tmp_path / "rec", events)
+    session.start()
+    events.wait_for("recording", timeout=15)
+    events.wait_for("phrase", timeout=60)
+    time.sleep(2.5)  # both samples (22.5 s and 15 s) are out at 4x by now
+    result = session.stop()
+
+    said = {source: " ".join(s.text for s in result.segments if s.source == source).lower()
+            for source in ("mic", "computer")}
+    assert "prueba de transcripción en vivo" in said["mic"]
+    assert "live transcription test" in said["computer"]
+    assert "transcription test" not in said["mic"]
+    assert [s.start for s in result.segments] == sorted(s.start for s in result.segments)
+    phrases = [payload for kind, payload in events.items if kind == "phrase"]
+    assert {phrase["source"] for phrase in phrases} == {"mic", "computer"}
+    assert 20 < result.duration_seconds < 40  # the stream's length, not both channels' samples added up
+    assert not any(path.exists() for path in session.tape_paths)
 
 
 @pytest.mark.slow

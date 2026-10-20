@@ -1,6 +1,8 @@
 """Stands in for ffmpeg in tests: no screen, no microphone.
 
-Streams a WAV on stdout as 16 kHz mono float32, faster than real time, then silence until it reads
+Streams a WAV on stdout as 16 kHz mono float32 (with --wav2, a second one on a second channel, as
+the Windows recorder streams the microphone and the computer's sound), faster than real time, then
+silence until it reads
 "q" on stdin (like the real recorders), and writes a placeholder video file. With --audio (once per
 audio source) it also reads those pipes, as ffmpeg reads the sources' pipes, writes "first frame"
 to stderr after --first-frame-after seconds, as the screen capture reports its first frame, and
@@ -20,14 +22,28 @@ BLOCK = 1_600  # 100 ms at 16 kHz
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--wav", required=True)
+parser.add_argument("--wav2")
 parser.add_argument("--out", required=True)
 parser.add_argument("--speed", type=float, default=4.0)
 parser.add_argument("--audio", action="append", default=[])
 parser.add_argument("--first-frame-after", type=float)
 args = parser.parse_args()
 
-with wave.open(args.wav) as wav:
-    audio = np.frombuffer(wav.readframes(wav.getnframes()), np.int16).astype(np.float32) / 32768
+
+
+def load(path: str) -> np.ndarray:
+    with wave.open(path) as wav:
+        return np.frombuffer(wav.readframes(wav.getnframes()), np.int16).astype(np.float32) / 32768
+
+
+audio = load(args.wav)
+channels = 1
+if args.wav2:
+    second = load(args.wav2)
+    length = max(len(audio), len(second))
+    pair = np.zeros((length, 2), np.float32)
+    pair[: len(audio), 0], pair[: len(second), 1] = audio, second
+    audio, channels = pair.reshape(-1), 2
 Path(args.out).write_bytes(b"placeholder video")
 
 stop = threading.Event()
@@ -67,11 +83,11 @@ sys.stderr.write("[info] fake recorder started\n")
 sys.stderr.flush()
 
 out = sys.stdout.buffer
-silence = np.zeros(BLOCK, np.float32).tobytes()
-for start in range(0, len(audio), BLOCK):
+silence = np.zeros(BLOCK * channels, np.float32).tobytes()
+for start in range(0, len(audio), BLOCK * channels):
     if stop.is_set():
         break
-    out.write(audio[start : start + BLOCK].tobytes())
+    out.write(audio[start : start + BLOCK * channels].tobytes())
     out.flush()
     time.sleep(0.1 / args.speed)
 deadline = time.monotonic() + 60

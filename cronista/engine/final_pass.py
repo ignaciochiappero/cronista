@@ -80,14 +80,26 @@ def find_quiet_cut(audio: np.ndarray, target: int, search: int, frame: int = 1_6
     return low + int(np.argmin(energy)) * frame + frame // 2
 
 
+def loudest(audio: np.ndarray, frame: int = 1_600) -> float:
+    """The RMS level of the loudest 100 ms frame."""
+    frames = len(audio) // frame
+    if frames == 0:
+        return float(np.sqrt(np.mean(np.square(audio, dtype=np.float64)))) if len(audio) else 0.0
+    energy = np.square(audio[: frames * frame].reshape(frames, frame), dtype=np.float64).mean(axis=1)
+    return float(np.sqrt(energy.max()))
+
+
 def run_final_pass_file(model, path, sample_rate: int = 16_000, *, chunk_seconds: float = 90.0,
-                        search_seconds: float = 10.0) -> list[TranscriptionSegment]:
+                        search_seconds: float = 10.0, silence: float = 0.002) -> list[TranscriptionSegment]:
     """The final pass over a recording's raw 16 kHz float32 audio file, in pause-aligned chunks.
 
     One pass over an hour of audio does not fit in memory (the encoder's attention grows with the
     square of the length), so the audio goes in chunks of about chunk_seconds, each cut at the
     quietest moment of the last search_seconds before its end so no word is split. Chunks are
     read from disk one at a time; nothing else of the recording is kept in RAM.
+
+    A chunk whose loudest moment is below `silence` is not sent to the model: the computer's sound
+    is digital silence while nothing plays, and each source is quiet while the other one talks.
     """
     total = Path(path).stat().st_size // 4
     chunk = int(chunk_seconds * sample_rate)
@@ -103,6 +115,9 @@ def run_final_pass_file(model, path, sample_rate: int = 16_000, *, chunk_seconds
             end = window_start + find_quiet_cut(window, target=len(window), search=search)
         audio = np.fromfile(path, dtype=np.float32, count=end - start, offset=start * 4)
         offset = start / sample_rate
+        if loudest(audio) < silence:
+            start = end
+            continue
         for segment in run_final_pass(model, audio, sample_rate):
             segments.append(TranscriptionSegment(segment.start + offset, segment.end + offset, segment.text))
         start = end

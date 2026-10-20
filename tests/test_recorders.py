@@ -63,24 +63,30 @@ def test_the_screen_is_recorded_alone_and_reports_its_first_frame(tmp_path: Path
 
 
 def test_the_microphone_alone_goes_to_the_audio_file_and_the_model(tmp_path: Path):
-    audio = processes(tmp_path, [MIC])["audio"].command
+    found = processes(tmp_path, [MIC])["audio"]
+    audio = found.command
     assert audio.count("-i") == 1
     assert audio[audio.index(MIC_PIPE) - 1] == "-i"
     assert maps(audio) == ["0:a", "0:a"]
     assert not any("amix" in arg or "dshow" in arg for arg in audio)
+    assert found.speech_channels == 1
 
 
-def test_with_the_computer_sound_the_mix_goes_to_the_audio_file_and_the_model(tmp_path: Path):
-    audio = processes(tmp_path, [MIC, COMPUTER])["audio"].command
+def test_with_the_computer_sound_the_file_gets_the_mix_and_the_model_each_source_apart(tmp_path: Path):
+    # The model hears the microphone and the computer's sound on two channels of one stream, so
+    # every phrase knows where it came from; the recording keeps them mixed.
+    found = processes(tmp_path, [MIC, COMPUTER])["audio"]
+    audio = found.command
     assert audio.count("-i") == 2
     assert audio.index(MIC_PIPE) < audio.index(COMPUTER_PIPE)
     graph = next(arg for arg in audio if "amix" in arg)
-    assert "[0:a]" in graph and "[1:a]" in graph
+    assert "[0:a]" in graph and "[1:a]" in graph and "amerge" in graph
     assert maps(audio) == ["[rec]", "[stt]"]
     assert any(arg.endswith("audio.m4a") for arg in audio)
     speech = audio[audio.index("[stt]"):]
     assert speech[-1] == "pipe:1"
-    assert speech[speech.index("-ar") + 1] == "16000" and speech[speech.index("-ac") + 1] == "1"
+    assert speech[speech.index("-ar") + 1] == "16000" and speech[speech.index("-ac") + 1] == "2"
+    assert found.speech_channels == 2
 
 
 needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="needs ffmpeg on PATH")
@@ -99,6 +105,29 @@ def streams(path: Path) -> list[str]:
     probe = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0", str(path)],
                            capture_output=True, text=True, check=True)
     return probe.stdout.split()
+
+
+@needs_ffmpeg
+def test_the_mix_graph_puts_the_microphone_left_and_the_computer_right(tmp_path: Path):
+    # The real graph, fed by two test tones instead of the pipes: 440 Hz as the microphone (mono) and
+    # 1000 Hz as the computer (stereo). Channel 0 of the speech stream must be the 440 Hz one.
+    import numpy as np
+
+    from cronista.engine.recorders import MIX_GRAPH
+
+    run = subprocess.run(
+        ["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=1",
+         "-f", "lavfi", "-i", "sine=frequency=1000:sample_rate=48000:duration=1,pan=stereo|c0=c0|c1=c0",
+         "-filter_complex", MIX_GRAPH,
+         "-map", "[rec]", "-c:a", "aac", str(tmp_path / "audio.m4a"),
+         "-map", "[stt]", "-ac", "2", "-ar", "16000", "-f", "f32le", "pipe:1"],
+        capture_output=True, check=True)
+    samples = np.frombuffer(run.stdout, dtype=np.float32).reshape(-1, 2)
+    assert len(samples) > 0.9 * 16_000
+    spectrum = [np.abs(np.fft.rfft(samples[:, channel])) for channel in (0, 1)]
+    hertz = [int(np.argmax(power)) * 16_000 / len(samples) for power in spectrum]
+    assert abs(hertz[0] - 440) < 5 and abs(hertz[1] - 1000) < 5
+    assert streams(tmp_path / "audio.m4a") == ["audio"]
 
 
 @needs_ffmpeg

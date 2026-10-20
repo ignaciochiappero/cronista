@@ -4,8 +4,8 @@ Pulled out of the spike's spike.py. Events reach on_event(kind, payload) from wo
 
   listening   the recorder started (on Linux the share dialog is up)
   recording   {"started_at"}: the first audio arrived, the recording runs
-  partial     {"committed", "pending"}: live text of the phrase in progress
-  phrase      {"start", "text"}: a finished phrase, live
+  partial     {"committed", "pending", "source"}: live text of the phrase in progress
+  phrase      {"start", "text", "source"}: a finished phrase, live
   ended       {"code", "reason"}: the recorder stopped on its own (time cap, error); call stop()
   notice      {"message"}: something to tell the user that does not stop the recording
   finalizing  the final pass over the whole recording is running
@@ -13,6 +13,10 @@ Pulled out of the spike's spike.py. Events reach on_event(kind, payload) from wo
 
 The audio for the final pass goes to a file in the recording's folder instead of RAM (an hour is
 ~230 MB) and is deleted once the final pass is done.
+
+When the recorder streams the microphone and the computer's sound apart (two channels), each one
+has its own phrase detection, live text and final pass, and every phrase says which it came from
+("source", voices.py); the microphone's echoes of the computer are left out.
 
 When the recorder takes its audio from Python (audio_sources.py, on Windows), the session reads
 the recorder's log as it comes: the line about the screen's first frame opens the StartGate, so
@@ -38,32 +42,34 @@ from .local_agreement import LocalAgreement
 from .recorders import IS_WINDOWS, SAMPLE_RATE, RecorderProcess, RecorderSettings
 from .transcript import TranscriptionSegment, tidy_text
 from .voice_activity import VoiceActivitySegmenter, VoiceEvent
+from .voices import SOURCES, drop_echoes, is_echo
 
-READ_BLOCK_BYTES = 1_600 * 4  # 100 ms of float32 mono
+READ_BLOCK_FRAMES = 1_600  # 100 ms of each channel
 PROBLEM_TAGS = ("[warning]", "[error]", "[fatal]", "[panic]")  # ffmpeg's -loglevel level+... prefixes
 EventSink = Callable[[str, dict], None]
 
 
 class SpeechScheduler:
-    """Hands work to the model: every final, but only the newest partial (from the spike).
+    """Hands work to the model: every final, but only the newest partial of each channel (from the spike).
 
     Partials that pile up while the model is busy are dropped in favour of the latest one, so the
-    live text never falls behind and a slow machine just updates less often.
+    live text never falls behind and a slow machine just updates less often. With two channels, the
+    one whose partial has waited longest goes first.
     """
 
     def __init__(self) -> None:
         self._condition = threading.Condition()
-        self._finals: deque[VoiceEvent] = deque()
-        self._partial: VoiceEvent | None = None
+        self._finals: deque[tuple[int, VoiceEvent]] = deque()
+        self._partials: dict[int, VoiceEvent] = {}  # in the order they started waiting
         self._closed = False
 
-    def submit(self, event: VoiceEvent) -> None:
+    def submit(self, channel: int, event: VoiceEvent) -> None:
         with self._condition:
             if event.kind == "final":
-                self._finals.append(event)
-                self._partial = None
+                self._finals.append((channel, event))
+                self._partials.pop(channel, None)
             else:
-                self._partial = event
+                self._partials[channel] = event  # a channel already waiting keeps its place, with newer audio
             self._condition.notify()
 
     def close(self) -> None:
@@ -71,15 +77,15 @@ class SpeechScheduler:
             self._closed = True
             self._condition.notify()
 
-    def next(self) -> VoiceEvent | None:
+    def next(self) -> tuple[int, VoiceEvent] | None:
         with self._condition:
-            while not self._finals and self._partial is None and not self._closed:
+            while not self._finals and not self._partials and not self._closed:
                 self._condition.wait()
             if self._finals:
                 return self._finals.popleft()
-            if self._partial is not None:
-                event, self._partial = self._partial, None
-                return event
+            if self._partials:
+                channel = next(iter(self._partials))
+                return channel, self._partials.pop(channel)
             return None
 
 
@@ -109,9 +115,11 @@ class RecordingSession:
         self.settings = settings
         self.folder = Path(folder)
         self.on_event = on_event
-        self.tape_path = self.folder / "audio-16k.f32"
+        self.tape_paths = [self.folder / "audio-16k.f32"]  # one per channel, see start()
         self.live_segments: list[TranscriptionSegment] = []
-        self._segmenter = VoiceActivitySegmenter(SAMPLE_RATE)
+        self._channels = 1
+        self._segmenters = [VoiceActivitySegmenter(SAMPLE_RATE)]
+        self._tapes: list = []
         self._scheduler = SpeechScheduler()
         self._running: list[tuple[RecorderProcess, subprocess.Popen]] = []
         self._speech: subprocess.Popen | None = None  # the process whose stdout feeds the model
@@ -146,11 +154,15 @@ class RecordingSession:
             for source in self._sources:
                 source.stop()
             raise
-        self._speech = next(popen for process, popen in self._running if process.speech)
+        speech_process, self._speech = next((process, popen) for process, popen in self._running if process.speech)
+        self._channels = speech_process.speech_channels
+        if self._channels > 1:
+            self.tape_paths = [self.folder / f"audio-16k-{SOURCES[channel]}.f32" for channel in range(self._channels)]
+            self._segmenters = [VoiceActivitySegmenter(SAMPLE_RATE) for _ in range(self._channels)]
         for source in self._sources:
             source.start()
         self._log = open(self.folder / "recorder.log", "w", encoding="utf-8")
-        self._tape = open(self.tape_path, "wb")
+        self._tapes = [open(path, "wb") for path in self.tape_paths]
         several = len(self._running) > 1
         self._log_readers = [threading.Thread(target=self._read_log, args=(process.name if several else "", popen),
                                               daemon=True) for process, popen in self._running]
@@ -196,8 +208,14 @@ class RecordingSession:
         # Putting the recording's parts together (Windows) runs while the final pass does.
         finishing = threading.Thread(target=self._finish_recording)
         finishing.start()
-        segments = run_final_pass_file(self.model, self.tape_path) if self._samples else []
-        self.tape_path.unlink(missing_ok=True)
+        segments: list[TranscriptionSegment] = []
+        if self._samples:
+            for channel, path in enumerate(self.tape_paths):
+                segments += [TranscriptionSegment(segment.start, segment.end, segment.text, SOURCES[channel])
+                             for segment in run_final_pass_file(self.model, path)]
+            segments = drop_echoes(segments)
+        for path in self.tape_paths:
+            path.unlink(missing_ok=True)
         finishing.join()
         video = self.folder / self.recorder.output_name
         result = SessionResult(
@@ -212,22 +230,27 @@ class RecordingSession:
         return result
 
     def _read_audio(self) -> None:
+        frame_bytes = 4 * self._channels
         while True:
-            chunk = self._speech.stdout.read(READ_BLOCK_BYTES)
+            chunk = self._speech.stdout.read(READ_BLOCK_FRAMES * frame_bytes)
             if not chunk:
                 break
             if self._started_at is None:
                 self._started_at = datetime.now()
                 self.on_event("recording", {"started_at": time.time()})
-            usable = chunk[: len(chunk) - len(chunk) % 4]
-            self._tape.write(usable)
-            samples = np.frombuffer(usable, dtype=np.float32)
-            self._samples += len(samples)
-            for event in self._segmenter.push(samples):
-                self._scheduler.submit(event)
-        for event in self._segmenter.flush():
-            self._scheduler.submit(event)
-        self._tape.close()
+            usable = chunk[: len(chunk) - len(chunk) % frame_bytes]
+            frames = np.frombuffer(usable, dtype=np.float32).reshape(-1, self._channels)
+            self._samples += len(frames)
+            for channel in range(self._channels):
+                samples = np.ascontiguousarray(frames[:, channel])
+                self._tapes[channel].write(samples.tobytes())
+                for event in self._segmenters[channel].push(samples):
+                    self._scheduler.submit(channel, event)
+        for channel, segmenter in enumerate(self._segmenters):
+            for event in segmenter.flush():
+                self._scheduler.submit(channel, event)
+        for tape in self._tapes:
+            tape.close()
         self._scheduler.close()
 
     def _read_log(self, name: str, popen: subprocess.Popen) -> None:
@@ -296,16 +319,27 @@ class RecordingSession:
         self.on_event("notice", {"message": message})
 
     def _transcribe(self) -> None:
-        agreement = LocalAgreement()  # steadies the live line; the final pass replaces it anyway
-        while (event := self._scheduler.next()) is not None:
+        # One agreement per channel steadies its live line; the final pass replaces them anyway.
+        agreements = [LocalAgreement() for _ in range(self._channels)]
+        heard_from_computer: deque[TranscriptionSegment] = deque(maxlen=20)  # to spot the microphone's echoes
+        while (item := self._scheduler.next()) is not None:
+            channel, event = item
+            source = SOURCES[channel]
             text = tidy_text(str(self.model.recognize(event.audio, sample_rate=SAMPLE_RATE)).strip())
             if event.kind == "partial":
-                snapshot = agreement.update(text)
-                self.on_event("partial", {"committed": snapshot.committed, "pending": snapshot.pending})
+                snapshot = agreements[channel].update(text)
+                self.on_event("partial", {"committed": snapshot.committed, "pending": snapshot.pending,
+                                          "source": source})
                 continue
-            agreement.reset()
-            if text:
-                segment = TranscriptionSegment(event.start_sample / SAMPLE_RATE,
-                                               event.speech_end_sample / SAMPLE_RATE, text)
-                self.live_segments.append(segment)
-                self.on_event("phrase", {"start": segment.start, "text": text})
+            agreements[channel].reset()
+            if not text:
+                continue
+            segment = TranscriptionSegment(event.start_sample / SAMPLE_RATE, event.speech_end_sample / SAMPLE_RATE,
+                                           text, source)
+            if source == "mic" and is_echo(segment, list(heard_from_computer)):
+                self.on_event("partial", {"committed": "", "pending": "", "source": source})  # its live line goes
+                continue
+            if source == "computer":
+                heard_from_computer.append(segment)
+            self.live_segments.append(segment)
+            self.on_event("phrase", {"start": segment.start, "text": text, "source": source})

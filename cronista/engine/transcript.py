@@ -20,6 +20,7 @@ class TranscriptionSegment:
     start: float
     end: float
     text: str
+    source: str | None = None  # "mic" or "computer" (voices.py); None in recordings made before 0.5.0
 
 
 def tidy_text(text: str) -> str:
@@ -54,12 +55,15 @@ def format_srt_timestamp(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
 
-def to_srt(segments: list[TranscriptionSegment]) -> str:
+def to_srt(segments: list[TranscriptionSegment], names: dict[str, str] | None = None) -> str:
+    """Subtitles; with `names` (voices.speakers), each one starts with who said it: "Ana: ..."."""
     blocks = []
     for segment in segments:
         text = segment.text.strip()
         if not text:
             continue
+        if names and segment.source in names:
+            text = f"{names[segment.source]}: {text}"
         timing = f"{format_srt_timestamp(segment.start)} --> {format_srt_timestamp(segment.end)}"
         blocks.append(f"{len(blocks) + 1}\n{timing}\n{text}\n")
     return "\n".join(blocks)

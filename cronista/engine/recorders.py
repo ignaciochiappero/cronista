@@ -33,12 +33,16 @@ QUALITY = {"best": 85, "balanced": 70, "smallest": 55}  # Media Foundation quali
 SCREEN_GRAPH = "gfxcapture=monitor_idx=0:max_framerate={fps},showinfo=checksum=0[screen]"
 FIRST_FRAME = re.compile(r"Parsed_showinfo.*\bn:\s*0\s+pts:")
 STEREO_48K = "aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo"
-# Microphone (input 0) plus the computer's sound (input 1). Summed rather than averaged, so the
-# microphone keeps the level it has without the computer's sound; the limiter only acts on the
-# rare peak where both are loud at once. One mix goes to the file and one to the speech model.
-MIX_GRAPH = (f"[0:a]{STEREO_48K}[mic];[1:a]{STEREO_48K}[computer];"
-             "[mic][computer]amix=inputs=2:duration=first:normalize=0,"
-             "alimiter=level=false:latency=true,asplit[rec][stt]")
+MONO_16K = "aresample=16000,aformat=sample_fmts=flt:channel_layouts=mono"
+# Microphone (input 0) plus the computer's sound (input 1). The recording gets them summed rather
+# than averaged, so the microphone keeps the level it has without the computer's sound; the limiter
+# only acts on the rare peak where both are loud at once. The speech model gets them apart: each one
+# in mono, side by side as the two channels of one stream (the microphone first), so every phrase
+# knows where it came from (voices.py).
+MIX_GRAPH = (f"[0:a]{STEREO_48K},asplit[mic][mic_stt];[1:a]{STEREO_48K},asplit[computer][computer_stt];"
+             "[mic][computer]amix=inputs=2:duration=first:normalize=0,alimiter=level=false:latency=true[rec];"
+             f"[mic_stt]{MONO_16K}[mic16];[computer_stt]{MONO_16K}[computer16];"
+             "[mic16][computer16]amerge=inputs=2[stt]")
 
 
 @dataclass(frozen=True)
@@ -55,6 +59,7 @@ class RecorderProcess:
     name: str  # starts its lines in recorder.log when a recorder has more than one
     command: list[str]
     speech: bool = False  # its stdout is the 16 kHz audio for the speech model
+    speech_channels: int = 1  # 2: the microphone and the computer's sound, apart (voices.SOURCES)
 
 
 def wake_screen(monitor_index: int = 0) -> None:
@@ -140,7 +145,8 @@ class WindowsRecorder:
         audio back: ffmpeg paces all its inputs to the stream that lags most, and gfxcapture sends
         frames only when the screen changes. 20 s of still screen let 1 s of audio through."""
         return [RecorderProcess("screen", self._screen_command(folder, settings)),
-                RecorderProcess("audio", self._audio_command(folder, settings, sources), speech=True)]
+                RecorderProcess("audio", self._audio_command(folder, settings, sources), speech=True,
+                                speech_channels=2 if len(sources) > 1 else 1)]
 
     def _screen_command(self, folder: Path, settings: RecorderSettings) -> list[str]:
         return [
@@ -168,16 +174,17 @@ class WindowsRecorder:
             inputs += ["-thread_queue_size", "1024", *source.ffmpeg_input()]
         mixing: list[str] = []
         recording_audio = speech_audio = "0:a"
+        channels = "1"
         if len(sources) > 1:
             mixing = ["-filter_complex", MIX_GRAPH]
-            recording_audio, speech_audio = "[rec]", "[stt]"
+            recording_audio, speech_audio, channels = "[rec]", "[stt]", "2"
         return [
             self.ffmpeg, "-hide_banner", "-nostats", "-stats_period", "0.1", "-loglevel", "level+warning",
             *mixing,
             *inputs,
             "-map", recording_audio, "-t", seconds, "-c:a", "aac", "-b:a", "128k", str(folder / self.audio_name),
-            # The same audio as 16 kHz mono float32 for the speech model.
-            "-map", speech_audio, "-t", seconds, "-ac", "1", "-ar", str(SAMPLE_RATE), "-f", "f32le", "pipe:1",
+            # For the speech model, 16 kHz float32: the microphone, and the computer's sound on a second channel.
+            "-map", speech_audio, "-t", seconds, "-ac", channels, "-ar", str(SAMPLE_RATE), "-f", "f32le", "pipe:1",
         ]
 
     def finish(self, folder: Path) -> None:

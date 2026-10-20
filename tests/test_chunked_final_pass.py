@@ -47,6 +47,24 @@ def test_long_audio_is_transcribed_in_chunks_with_shifted_times(tmp_path):
     assert [s.text for s in segments][:2] == ["chunk1.", "chunk2."]
 
 
+def test_silent_chunks_are_not_sent_to_the_model(tmp_path):
+    # The computer's sound is digital silence while nothing plays, and each source is quiet while the
+    # other one talks: with one pass per source, skipping those chunks saves most of the second pass.
+    audio = np.concatenate([tone(4.0), np.zeros(20 * RATE, np.float32)])
+    path = tmp_path / "audio.f32"
+    audio.tofile(path)
+    model = FakeTimestampedModel()
+    segments = run_final_pass_file(model, path, chunk_seconds=8, search_seconds=3)
+    assert len(model.chunk_lengths) == 1
+    assert [s.text for s in segments] == ["chunk1."]
+
+    silent = tmp_path / "silent.f32"
+    np.zeros(10 * RATE, np.float32).tofile(silent)
+    model = FakeTimestampedModel()
+    assert run_final_pass_file(model, silent) == []
+    assert model.chunk_lengths == []
+
+
 def test_short_audio_is_a_single_chunk(tmp_path):
     path = tmp_path / "audio.f32"
     tone(5.0).tofile(path)
