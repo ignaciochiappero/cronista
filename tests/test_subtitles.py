@@ -58,3 +58,26 @@ def test_the_copy_has_the_subtitles_burned_in_and_the_same_sound(tmp_path: Path)
     streams = subprocess.run([shutil.which("ffprobe"), "-v", "error", "-show_entries", "stream=codec_type",
                               "-of", "csv=p=0", str(path)], capture_output=True, text=True, check=True).stdout.split()
     assert streams == ["video", "audio"]
+
+
+@pytest.mark.skipif(os.name != "nt" or ffmpeg is None or shutil.which("ffprobe") is None,
+                    reason="needs Windows (Media Foundation), ffmpeg and ffprobe")
+def test_a_transcribed_video_gets_its_copy_in_cronistas_folder_and_is_left_alone(tmp_path: Path):
+    # Any format: here odd-sized pictures and FLAC sound in a Matroska file, with a subtitle track
+    # an MP4 could not hold.
+    downloads = tmp_path / "Downloads"
+    downloads.mkdir()
+    source = downloads / "Demo [final].mkv"
+    (tmp_path / "talk.srt").write_text("1\n00:00:00,000 --> 00:00:01,000\nHi\n", encoding="utf-8")
+    subprocess.run([ffmpeg, "-v", "error", "-f", "lavfi", "-i", "color=c=0x223344:size=641x361:rate=25:duration=3",
+                    "-f", "lavfi", "-i", "sine=duration=3", "-i", str(tmp_path / "talk.srt"),
+                    "-c:v", "mpeg4", "-c:a", "flac", "-c:s", "srt", str(source)], check=True)
+    before = source.read_bytes()
+    folder = tmp_path / "Cronista"
+    folder.mkdir()
+    path = burn_subtitles(ffmpeg, folder, CALL, None, source=source)
+    assert path == folder / "Demo [final]-subtitled.mp4" and path.exists()
+    assert source.read_bytes() == before and sorted(p.name for p in downloads.iterdir()) == ["Demo [final].mkv"]
+    streams = subprocess.run([shutil.which("ffprobe"), "-v", "error", "-show_entries", "stream=codec_type,codec_name",
+                              "-of", "csv=p=0", str(path)], capture_output=True, text=True, check=True).stdout.split()
+    assert streams == ["h264,video", "aac,audio"]

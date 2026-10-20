@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS recordings (
     transcript TEXT DEFAULT '',
     segments_json TEXT DEFAULT '[]',
     notes TEXT DEFAULT '',
-    labels_json TEXT DEFAULT '{}'
+    labels_json TEXT DEFAULT '{}',
+    kind TEXT DEFAULT 'recording'
 );
 CREATE VIRTUAL TABLE IF NOT EXISTS recordings_fts
     USING fts5(title, transcript, notes, content='recordings', content_rowid='rowid');
@@ -42,7 +43,9 @@ CREATE TRIGGER IF NOT EXISTS recordings_au AFTER UPDATE ON recordings BEGIN
     VALUES (new.rowid, new.title, new.transcript, new.notes);
 END;
 """
-LIST_COLUMNS = "r.id, r.title, r.created_at, r.duration_seconds, r.size_bytes, r.folder, r.video_path"
+LIST_COLUMNS = "r.id, r.title, r.created_at, r.duration_seconds, r.size_bytes, r.folder, r.video_path, r.kind"
+# What a history entry is: Cronista's own recording, or a file the user dropped, with or without pictures.
+KINDS = ("recording", "audio", "video")
 
 
 def sanitize_fts_query(search: str) -> str | None:
@@ -60,10 +63,13 @@ class Library:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
             db.executescript(SCHEMA)
-            # Histories from before 0.5.0 have no labels column: add it, empty, keeping everything else.
+            # Histories from before 0.5.0 have no labels column, and from before 0.7.0 no kind: add
+            # them, empty or "recording", keeping everything else.
             columns = {row["name"] for row in db.execute("PRAGMA table_info(recordings)")}
             if "labels_json" not in columns:
                 db.execute("ALTER TABLE recordings ADD COLUMN labels_json TEXT DEFAULT '{}'")
+            if "kind" not in columns:
+                db.execute("ALTER TABLE recordings ADD COLUMN kind TEXT DEFAULT 'recording'")
 
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(str(self.path))
@@ -71,15 +77,18 @@ class Library:
         return db
 
     def add(self, *, title: str, created_at: str, duration_seconds: float, size_bytes: int, folder: str,
-            video_path: str, transcript: str, segments: list[dict], labels: dict | None = None) -> str:
-        """`labels`: the name of each audio source ("mic", "computer") when the recording was made."""
+            video_path: str, transcript: str, segments: list[dict], labels: dict | None = None,
+            kind: str = "recording") -> str:
+        """`labels`: the name of each audio source ("mic", "computer") when the recording was made.
+        `kind`: one of KINDS; for a dropped file, `video_path` is the file itself, wherever it is."""
         recording_id = uuid.uuid4().hex
         with self._connect() as db:
             db.execute(
                 "INSERT INTO recordings (id, title, created_at, duration_seconds, size_bytes, folder, video_path, "
-                "transcript, segments_json, labels_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "transcript, segments_json, labels_json, kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (recording_id, title, created_at, duration_seconds, size_bytes, folder, video_path,
-                 transcript, json.dumps(segments, ensure_ascii=False), json.dumps(labels or {}, ensure_ascii=False)),
+                 transcript, json.dumps(segments, ensure_ascii=False), json.dumps(labels or {}, ensure_ascii=False),
+                 kind if kind in KINDS else "recording"),
             )
         return recording_id
 
@@ -90,13 +99,14 @@ class Library:
                 rows = db.execute(
                     f"SELECT {LIST_COLUMNS}, snippet(recordings_fts, 1, '[', ']', '…', 10) AS snippet "
                     "FROM recordings r JOIN recordings_fts f ON r.rowid = f.rowid "
-                    "WHERE recordings_fts MATCH ? ORDER BY r.created_at DESC LIMIT ?",
+                    "WHERE recordings_fts MATCH ? ORDER BY r.created_at DESC, r.rowid DESC LIMIT ?",
                     (query, limit),
                 ).fetchall()
             else:
                 rows = db.execute(
                     f"SELECT {LIST_COLUMNS}, substr(r.transcript, 1, 200) AS snippet "
-                    "FROM recordings r ORDER BY r.created_at DESC LIMIT ?",
+                    # Files dropped together can share a second: the one added last comes first.
+                    "FROM recordings r ORDER BY r.created_at DESC, r.rowid DESC LIMIT ?",
                     (limit,),
                 ).fetchall()
         return [dict(row) for row in rows]

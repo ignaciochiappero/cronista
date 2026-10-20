@@ -84,7 +84,8 @@ def write_text_files(segments: list[TranscriptionSegment], folder: Path,
 
 
 def write_word(segments: list[TranscriptionSegment], output_path: Path, *, title: str, recorded_at: datetime,
-               language: str = "en", names: dict[str, str] | None = None) -> Path:
+               language: str = "en", names: dict[str, str] | None = None, from_file: bool = False) -> Path:
+    """`from_file`: the transcript of a file the user dropped, so its date is when it was transcribed."""
     words = export_words(language)
     doc = Document()
     style = doc.styles["Normal"]
@@ -97,7 +98,7 @@ def write_word(segments: list[TranscriptionSegment], output_path: Path, *, title
     heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
     meta = doc.add_paragraph()
     meta.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = meta.add_run(words["recorded"].format(recorded_at))
+    run = meta.add_run(words["transcribed" if from_file else "recorded"].format(recorded_at))
     run.font.size = Pt(10)
     run.font.color.rgb = RGBColor(100, 100, 100)
 
@@ -150,7 +151,7 @@ def _pdf_fonts() -> tuple[str, str]:
 
 
 def pdf_story(segments: list[TranscriptionSegment], *, title: str, recorded_at: datetime, language: str = "en",
-              names: dict[str, str] | None = None) -> list:
+              names: dict[str, str] | None = None, from_file: bool = False) -> list:
     """The PDF's content as reportlab flowables: what write_word writes, in the same order."""
     from reportlab.lib.colors import HexColor
     from reportlab.lib.enums import TA_CENTER
@@ -167,7 +168,7 @@ def pdf_story(segments: list[TranscriptionSegment], *, title: str, recorded_at: 
     timed_style = ParagraphStyle("line", fontName=regular, fontSize=10, leading=13.5, spaceAfter=2.5)
 
     story = [Paragraph(escape(title), title_style),
-             Paragraph(escape(words["recorded"].format(recorded_at)), meta_style),
+             Paragraph(escape(words["transcribed" if from_file else "recorded"].format(recorded_at)), meta_style),
              Paragraph(words["transcript"], heading)]
     story += [Paragraph((f"<b>{escape(speaker)}:</b> " if speaker else "") + escape(text), body)
               for speaker, text in _turns(segments, names)]
@@ -182,7 +183,7 @@ def pdf_story(segments: list[TranscriptionSegment], *, title: str, recorded_at: 
 
 
 def write_pdf(segments: list[TranscriptionSegment], output_path: Path, *, title: str, recorded_at: datetime,
-              language: str = "en", names: dict[str, str] | None = None) -> Path:
+              language: str = "en", names: dict[str, str] | None = None, from_file: bool = False) -> Path:
     from reportlab.lib.colors import HexColor
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import cm
@@ -202,6 +203,7 @@ def write_pdf(segments: list[TranscriptionSegment], output_path: Path, *, title:
     output.parent.mkdir(parents=True, exist_ok=True)
     document = SimpleDocTemplate(str(output), pagesize=A4, title=title, author="Cronista",
                                  leftMargin=margin, rightMargin=margin, topMargin=2 * cm, bottomMargin=2 * cm)
-    document.build(pdf_story(segments, title=title, recorded_at=recorded_at, language=language, names=names),
+    document.build(pdf_story(segments, title=title, recorded_at=recorded_at, language=language, names=names,
+                             from_file=from_file),
                    onFirstPage=page_number, onLaterPages=page_number)
     return output

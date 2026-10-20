@@ -91,8 +91,8 @@ def test_a_history_from_before_labels_gets_them_without_losing_anything(tmp_path
 
     path = tmp_path / "library.db"
     with sqlite3.connect(path) as db:  # the tables as versions up to 0.4.0 made them: no labels column
-        old_schema = SCHEMA.replace(",\n    labels_json TEXT DEFAULT '{}'", "")
-        assert "labels_json" not in old_schema
+        old_schema = SCHEMA.replace(",\n    labels_json TEXT DEFAULT '{}'", "").replace(",\n    kind TEXT DEFAULT 'recording'", "")
+        assert "labels_json" not in old_schema and "kind" not in old_schema
         db.executescript(old_schema)
         db.execute("INSERT INTO recordings (id, title, created_at, folder, video_path, transcript, segments_json) "
                    "VALUES ('old', 'Old', '2026-10-01T10:00:00', 'f', 'v', 'hola', "
@@ -102,3 +102,29 @@ def test_a_history_from_before_labels_gets_them_without_losing_anything(tmp_path
     assert old["labels"] == {} and old["segments"][0]["text"] == "hola"
     library.set_label("old", "mic", "Yo")
     assert library.get("old")["labels"] == {"mic": "Yo"}
+
+
+def test_tells_recordings_from_files_that_were_transcribed(tmp_path):
+    library = Library(tmp_path / "library.db")
+    recorded = add(library, "call", "hola", "2026-10-19T10:00:00", tmp_path)
+    dropped = library.add(title="Interview", created_at="2026-10-20T10:00:00", duration_seconds=60.0, size_bytes=1,
+                          folder=str(tmp_path / "Interview"), video_path=str(tmp_path / "Interview.m4a"),
+                          transcript="hi", segments=[], kind="audio")
+    assert library.get(recorded)["kind"] == "recording"
+    assert library.get(dropped)["kind"] == "audio"
+    assert [r["kind"] for r in library.list()] == ["audio", "recording"]
+
+
+def test_a_history_from_before_files_could_be_transcribed_calls_everything_a_recording(tmp_path):
+    import sqlite3
+
+    from cronista.library import SCHEMA
+
+    path = tmp_path / "library.db"
+    with sqlite3.connect(path) as db:  # the tables as versions 0.5.0 and 0.6.0 made them: no kind column
+        db.executescript(SCHEMA.replace(",\n    kind TEXT DEFAULT 'recording'", ""))
+        db.execute("INSERT INTO recordings (id, title, created_at, folder, video_path) "
+                   "VALUES ('old', 'Old', '2026-10-01T10:00:00', 'f', 'v')")
+    library = Library(path)
+    assert library.get("old")["kind"] == "recording"
+    assert library.list()[0]["kind"] == "recording"

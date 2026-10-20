@@ -65,6 +65,25 @@ def test_silent_chunks_are_not_sent_to_the_model(tmp_path):
     assert model.chunk_lengths == []
 
 
+def test_each_chunk_is_reported_when_done_and_a_stop_ends_the_pass(tmp_path):
+    # A file the user drops shows its transcript as it comes, and can be cancelled between chunks.
+    audio = np.concatenate([tone(4.0), np.zeros(RATE, np.float32)] * 5)  # 25 s with a pause every 5 s
+    path = tmp_path / "audio.f32"
+    audio.tofile(path)
+    reported = []
+    segments = run_final_pass_file(FakeTimestampedModel(), path, chunk_seconds=8, search_seconds=3,
+                                   on_chunk=lambda new, done: reported.append(([s.text for s in new], done)))
+    assert [texts for texts, _ in reported] == [[segment.text] for segment in segments]
+    assert [done for _, done in reported] == sorted(done for _, done in reported)
+    assert reported[-1][1] == 25.0
+
+    model = FakeTimestampedModel()
+    kept = run_final_pass_file(model, path, chunk_seconds=8, search_seconds=3,
+                               stopped=lambda: len(model.chunk_lengths) == 2)
+    assert len(model.chunk_lengths) == 2
+    assert [segment.text for segment in kept] == ["chunk1.", "chunk2."]
+
+
 def test_short_audio_is_a_single_chunk(tmp_path):
     path = tmp_path / "audio.f32"
     tone(5.0).tofile(path)

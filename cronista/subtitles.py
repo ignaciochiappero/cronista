@@ -73,10 +73,22 @@ def ass_document(segments: list[TranscriptionSegment], names: dict[str, str] | N
 
 
 def burn_subtitles(ffmpeg: str, folder: Path, segments: list[TranscriptionSegment],
-                   names: dict[str, str] | None, *, quality: int = 70) -> Path:
-    """Writes recording-subtitled.mp4 next to recording.mp4 and returns its path."""
+                   names: dict[str, str] | None, *, quality: int = 70, source: Path | None = None) -> Path:
+    """Writes recording-subtitled.mp4 next to recording.mp4 and returns its path.
+
+    With `source`, a video the user dropped (any format, wherever it is), the copy is written in
+    `folder`, Cronista's, as "<its name>-subtitled.mp4", and the video itself is only read: at its own
+    frame rate, its size rounded to even numbers for H.264, and its sound in AAC, which an MP4 holds.
+    """
     folder = Path(folder)
-    if not (folder / SOURCE_NAME).exists():
+    if source is None:
+        video, output, frames, sound = SOURCE_NAME, SUBTITLED_NAME, "fps=30,", ["-c:a", "copy"]
+        tuning = ["-scenario", "display_remoting"]  # the encoder's setting for screen content
+    else:
+        video, output = str(source), f"{Path(source).stem}-subtitled.mp4"
+        frames, sound = "scale=trunc(iw/2)*2:trunc(ih/2)*2,", ["-c:a", "aac", "-b:a", "160k"]
+        tuning = []
+    if not (folder / video).exists():  # an absolute source stays itself when joined to the folder
         raise RuntimeError("The video file is no longer there.")
     ass = folder / ASS_NAME
     ass.write_text(ass_document(segments, names), encoding="utf-8")
@@ -84,14 +96,13 @@ def burn_subtitles(ffmpeg: str, folder: Path, segments: list[TranscriptionSegmen
         # Run in the recording's folder so the filter gets a bare file name: a Windows path would
         # need its drive's colon and its backslashes escaped twice, for the filter and for its option.
         result = subprocess.run(
-            [ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", SOURCE_NAME,
-             "-vf", f"fps=30,subtitles={ASS_NAME},format=nv12",
+            [ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", video, "-map", "0:v:0", "-map", "0:a:0?",
+             "-vf", f"{frames}subtitles={ASS_NAME},format=nv12",
              "-c:v", "h264_mf", "-hw_encoding", "1", "-rate_control", "quality", "-quality", str(quality),
-             "-scenario", "display_remoting", "-profile:v", "100", "-g", "300",
-             "-c:a", "copy", "-movflags", "+faststart", SUBTITLED_NAME],
+             *tuning, "-profile:v", "100", "-g", "300", *sound, "-movflags", "+faststart", output],
             cwd=folder, capture_output=True, text=True, encoding="utf-8", errors="replace", **NO_WINDOW)
     finally:
         ass.unlink(missing_ok=True)
     if result.returncode != 0:
         raise RuntimeError(f"Making the subtitled video failed: {result.stderr.strip()[-300:]}")
-    return folder / SUBTITLED_NAME
+    return folder / output

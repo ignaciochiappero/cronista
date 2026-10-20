@@ -9,6 +9,7 @@ Timing comes from onnx-asr's token timestamps (`with_timestamps()`, 0.08 s resol
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -90,7 +91,9 @@ def loudest(audio: np.ndarray, frame: int = 1_600) -> float:
 
 
 def run_final_pass_file(model, path, sample_rate: int = 16_000, *, chunk_seconds: float = 90.0,
-                        search_seconds: float = 10.0, silence: float = 0.002) -> list[TranscriptionSegment]:
+                        search_seconds: float = 10.0, silence: float = 0.002,
+                        on_chunk: Callable[[list[TranscriptionSegment], float], None] | None = None,
+                        stopped: Callable[[], bool] | None = None) -> list[TranscriptionSegment]:
     """The final pass over a recording's raw 16 kHz float32 audio file, in pause-aligned chunks.
 
     One pass over an hour of audio does not fit in memory (the encoder's attention grows with the
@@ -100,13 +103,16 @@ def run_final_pass_file(model, path, sample_rate: int = 16_000, *, chunk_seconds
 
     A chunk whose loudest moment is below `silence` is not sent to the model: the computer's sound
     is digital silence while nothing plays, and each source is quiet while the other one talks.
+
+    A file the user drops shows its transcript as it comes: on_chunk(new_segments, seconds_done) is
+    called after each chunk. When stopped() says so, the pass ends before the next chunk.
     """
     total = Path(path).stat().st_size // 4
     chunk = int(chunk_seconds * sample_rate)
     search = int(search_seconds * sample_rate)
     segments: list[TranscriptionSegment] = []
     start = 0
-    while start < total:
+    while start < total and not (stopped and stopped()):
         if total - start <= chunk + search:
             end = total
         else:
@@ -115,10 +121,12 @@ def run_final_pass_file(model, path, sample_rate: int = 16_000, *, chunk_seconds
             end = window_start + find_quiet_cut(window, target=len(window), search=search)
         audio = np.fromfile(path, dtype=np.float32, count=end - start, offset=start * 4)
         offset = start / sample_rate
-        if loudest(audio) < silence:
-            start = end
-            continue
-        for segment in run_final_pass(model, audio, sample_rate):
-            segments.append(TranscriptionSegment(segment.start + offset, segment.end + offset, segment.text))
+        new: list[TranscriptionSegment] = []
+        if loudest(audio) >= silence:
+            new = [TranscriptionSegment(segment.start + offset, segment.end + offset, segment.text)
+                   for segment in run_final_pass(model, audio, sample_rate)]
+            segments += new
         start = end
+        if on_chunk:
+            on_chunk(new, end / sample_rate)
     return segments
