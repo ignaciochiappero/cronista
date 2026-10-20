@@ -1,6 +1,6 @@
 [project]
 name = "cronista"
-version = "0.4.0"
+version = "0.5.0"
 description = "Screen recorder with live, local speech-to-text (Spanish and English)"
 requires-python = ">=3.11"
 dependencies = [
