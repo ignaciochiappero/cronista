@@ -20,6 +20,9 @@ OutputDir=..\dist
 OutputBaseFilename=Cronista-Setup-{#AppVersion}
 SetupIconFile=..\assets\cronista.ico
 UninstallDisplayIcon={app}\Cronista.exe
+; Tells Windows to refresh its icons when done: after an update in place, the taskbar and the
+; Start menu kept showing the icon the previous version had (from Windows' icon cache).
+ChangesAssociations=yes
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
