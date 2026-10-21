@@ -109,8 +109,12 @@ class SessionResult:
 
 
 class RecordingSession:
-    def __init__(self, model, recorder, settings: RecorderSettings, folder: Path, on_event: EventSink) -> None:
+    def __init__(self, model, recorder, settings: RecorderSettings, folder: Path, on_event: EventSink, *,
+                 refiner=None) -> None:
         self.model = model
+        # High quality: refiner() makes each source's refine for the final pass (canary_pass.CanaryPass),
+        # or None when it cannot.
+        self.refiner = refiner
         self.recorder = recorder
         self.settings = settings
         self.folder = Path(folder)
@@ -210,9 +214,15 @@ class RecordingSession:
         finishing.start()
         segments: list[TranscriptionSegment] = []
         if self._samples:
+            seconds = self._samples / SAMPLE_RATE
+            total, started = seconds * len(self.tape_paths), time.monotonic()
             for channel, path in enumerate(self.tape_paths):
+                refine = self.refiner() if self.refiner else None
                 segments += [TranscriptionSegment(segment.start, segment.end, segment.text, SOURCES[channel])
-                             for segment in run_final_pass_file(self.model, path)]
+                             for segment in run_final_pass_file(
+                                 self.model, path, refine=refine,
+                                 on_chunk=lambda _, done, before=channel * seconds:
+                                     self._final_progress(before + done, total, started))]
             segments = drop_echoes(segments)
         for path in self.tape_paths:
             path.unlink(missing_ok=True)
@@ -228,6 +238,12 @@ class RecordingSession:
         )
         self.on_event("finished", result.to_dict())
         return result
+
+    def _final_progress(self, done: float, total: float, started: float) -> None:
+        """How much of the final pass is done, and the seconds left at its pace so far: with high quality,
+        an hour's recording takes minutes."""
+        eta = round((total - done) * (time.monotonic() - started) / done) if done > 0 else None
+        self.on_event("finalizing", {"progress": round(min(done / total, 1.0), 4), "eta": eta})
 
     def _read_audio(self) -> None:
         frame_bytes = 4 * self._channels

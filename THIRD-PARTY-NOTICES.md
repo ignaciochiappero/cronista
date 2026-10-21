@@ -35,6 +35,14 @@ The speech model, by NVIDIA, licensed under
 its ONNX conversion (int8) by [istupakov](https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx),
 through onnx-asr. The model files are unmodified.
 
+## Canary 1B v2
+
+Not in the installer: Cronista downloads it when you choose **High** transcription quality. The
+speech model, by NVIDIA, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/):
+[nvidia/canary-1b-v2](https://huggingface.co/nvidia/canary-1b-v2). Cronista uses its ONNX conversion
+(int8) by [istupakov](https://huggingface.co/istupakov/canary-1b-v2-onnx), revision `5ebc1520`,
+through onnx-asr. The model files are unmodified.
+
 ## Python and its packages
 
 | Software | License |

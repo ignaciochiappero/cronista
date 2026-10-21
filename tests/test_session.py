@@ -100,6 +100,8 @@ def test_records_transcribes_live_and_finishes_with_the_final_pass(model, tmp_pa
     assert events.kinds[0] == "listening"
     assert "partial" in events.kinds
     assert events.kinds[-2:] == ["finalizing", "finished"]
+    progress = [payload["progress"] for kind, payload in events.items if kind == "finalizing" and payload]
+    assert progress and progress == sorted(progress) and progress[-1] == 1.0  # the final pass says how far it got
     assert "prueba de transcripción en vivo" in result.transcript.lower()
     assert result.duration_seconds > 20
     assert result.size_bytes > 0
@@ -129,6 +131,38 @@ def test_each_source_is_transcribed_apart_and_says_where_it_came_from(model, tmp
     assert {phrase["source"] for phrase in phrases} == {"mic", "computer"}
     assert 20 < result.duration_seconds < 40  # the stream's length, not both channels' samples added up
     assert not any(path.exists() for path in session.tape_paths)
+
+
+CANARY = HERE.parent / "models" / "canary-1b-v2"
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not (CANARY / "encoder-model.int8.onnx").exists(), reason="needs Canary in models/canary-1b-v2")
+def test_in_high_quality_each_source_is_written_again_in_its_own_language(model, tmp_path):
+    from cronista.engine.canary_pass import CanaryPass
+    from cronista.engine.stt_engine import load_canary
+
+    canary = load_canary(CANARY)
+    made = []
+
+    def refiner():
+        made.append(CanaryPass(canary))
+        return made[-1]
+
+    events = Events()
+    recorder = FakeRecorder(DATA / "es.wav", second_wav=DATA / "en.wav")
+    session = RecordingSession(model, recorder, RecorderSettings(), tmp_path / "rec", events, refiner=refiner)
+    session.start()
+    events.wait_for("recording", timeout=15)
+    events.wait_for("phrase", timeout=60)
+    time.sleep(2.5)
+    result = session.stop()
+
+    said = {source: " ".join(s.text for s in result.segments if s.source == source).lower()
+            for source in ("mic", "computer")}
+    assert "mientras hablo" in said["mic"]  # Parakeet alone hears "mientro"
+    assert "live transcription test" in said["computer"]
+    assert [refine.language for refine in made] == ["es", "en"]
 
 
 @pytest.mark.slow

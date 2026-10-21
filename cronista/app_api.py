@@ -17,10 +17,12 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 
+from .downloads import DownloadCancelled, DownloadFailed, download, missing
+from .engine.canary_pass import CanaryPass
 from .engine.ffmpeg_locator import find_ffmpeg
 from .engine.recorders import QUALITY, RecorderSettings, default_recorder, pick_microphone
 from .engine.session import RecordingSession
-from .engine.stt_engine import load_parakeet
+from .engine.stt_engine import CANARY_FILES, load_canary, load_parakeet
 from .engine.transcript import TranscriptionSegment
 from .engine.voices import SOURCES, line, speakers
 from .export import write_pdf, write_text_files, write_word
@@ -59,6 +61,13 @@ class Api:
         self._importing: dict | None = None  # the one being transcribed, as the page shows it
         self._importer: threading.Thread | None = None
         self._import_stop = threading.Event()
+        # High quality: Canary, downloaded the first time it is chosen, and loaded only while a final pass
+        # or a queue of files needs it (about 1 GB of memory).
+        self._canary = None
+        self._canary_lock = threading.Lock()
+        self._canary_download: dict | None = None  # while it downloads: as the page shows it
+        self._downloader: threading.Thread | None = None
+        self._download_stop = threading.Event()
         try:
             self._recorder = default_recorder()
         except RuntimeError as error:
@@ -154,10 +163,111 @@ class Api:
                          "tour_seen": bool(settings.get("tour_seen", False)),
                          "labels": _clean_labels(settings.get("labels") or {}),  # only the ones the user named
                          "subtitles": bool(settings.get("subtitles", False)),
-                         "theme": settings.get("theme") if settings.get("theme") in THEMES else "system"},
+                         "theme": settings.get("theme") if settings.get("theme") in THEMES else "system",
+                         "transcription": self._transcription()},
             "recordings_dir": str(recordings_dir()),
             "importing": dict(self._importing) if self._importing else None,
+            "canary": self._canary_status(),
         }
+
+    # --- transcription quality ----------------------------------------------------------------
+    def _canary_folder(self) -> Path:
+        return data_dir() / "models" / "canary-1b-v2"
+
+    def _canary_status(self) -> dict:
+        """{"state": "missing"}, "ready", or while it downloads "downloading" with done, total (bytes) and eta."""
+        if self._canary_download is not None:
+            return dict(self._canary_download)
+        return {"state": "missing" if missing(self._canary_folder(), CANARY_FILES) else "ready"}
+
+    def _transcription(self) -> str:
+        """"high" when the user chose it and Canary is here; otherwise "standard" (medium-low, Parakeet)."""
+        chosen = self._load_settings().get("transcription")
+        return "high" if chosen == "high" and self._canary_status()["state"] == "ready" else "standard"
+
+    def set_transcription(self, quality: str) -> dict:
+        """"standard" (medium-low: Parakeet alone, as always) or "high" (Canary writes the final pass again,
+        for recordings and files). The first "high" downloads Canary, about 1 GB: "canary" events say how
+        it goes, and once it is here "high" is chosen. "standard" while it downloads stops the download,
+        which goes on from there next time."""
+        if quality == "standard":
+            self._download_stop.set()
+            self._save_settings(transcription="standard")
+            return {"ok": True, "transcription": "standard"}
+        if quality != "high":
+            return {"error": "Unknown transcription quality."}
+        with self._lock:
+            if self._canary_status()["state"] == "ready":
+                self._save_settings(transcription="high")
+                return {"ok": True, "transcription": "high"}
+            if self._downloader is None:
+                self._download_stop.clear()
+                self._canary_download = {"state": "downloading", "done": 0,
+                                         "total": sum(file.size for file in CANARY_FILES), "eta": None}
+                self._downloader = threading.Thread(target=self._download_canary, daemon=True)
+                self._downloader.start()
+        return {"ok": True, "downloading": True}
+
+    def _download_canary(self) -> None:
+        started, last = time.monotonic(), 0.0
+        first: list[int] = []  # the bytes already there when it began: a download stopped before goes on
+
+        def progress(done: int, total: int) -> None:
+            nonlocal last
+            first[:] = first or [done]
+            now = time.monotonic()
+            eta = round((total - done) * (now - started) / (done - first[0])) if done > first[0] else None
+            self._canary_download = {"state": "downloading", "done": done, "total": total, "eta": eta}
+            if now - last >= 0.25 or done == total:
+                last = now
+                self._emit("canary", dict(self._canary_download))
+
+        ended: dict = {}
+        try:
+            download(self._canary_folder(), CANARY_FILES, progress=progress, stopped=self._download_stop.is_set)
+            if not self._download_stop.is_set():  # the user did not go back to medium-low meanwhile
+                self._save_settings(transcription="high")
+        except DownloadCancelled:
+            pass
+        except DownloadFailed as error:
+            ended = {"state": "error", "message": str(error)}
+        except Exception as error:  # noqa: BLE001 - shown to the user, details in the log
+            traceback.print_exc()
+            ended = {"state": "error", "message": f"Downloading the model failed ({error}). Try again."}
+        finally:
+            with self._lock:
+                self._canary_download = None
+                self._downloader = None
+        self._emit("canary", {**(ended or self._canary_status()), "transcription": self._transcription()})
+
+    def _refiner(self):
+        """For high quality, what makes each source's or file's CanaryPass (Canary loads at the first);
+        None for medium-low. If Canary does not load, that transcript is written in medium-low and the
+        page is told."""
+        if self._transcription() != "high":
+            return None
+        failed: list[bool] = []
+
+        def make():
+            if failed:
+                return None
+            try:
+                with self._canary_lock:
+                    if self._canary is None:
+                        self._canary = load_canary(self._canary_folder(), threads=4)
+                    return CanaryPass(self._canary)
+            except Exception as error:  # noqa: BLE001 - that transcript falls back to medium-low
+                traceback.print_exc()
+                failed.append(True)
+                self._emit("notice", {"message": f"High quality could not be used ({error}). "
+                                                 "This transcript was written in medium-low quality."})
+                return None
+
+        return make
+
+    def _release_canary(self) -> None:
+        with self._canary_lock:
+            self._canary = None
 
     # --- recording ----------------------------------------------------------------------------
     def start(self, microphone: str | None, quality: str, system_audio: bool = True,
@@ -178,7 +288,8 @@ class Api:
             settings = RecorderSettings(microphone=microphone or None,
                                         quality=quality if quality in QUALITY else "balanced",
                                         system_audio=bool(system_audio))
-            session = RecordingSession(self._model, self._recorder, settings, folder, self._on_session_event)
+            session = RecordingSession(self._model, self._recorder, settings, folder, self._on_session_event,
+                                       refiner=self._refiner())
             try:
                 session.start()
             except Exception as error:  # noqa: BLE001
@@ -235,6 +346,7 @@ class Api:
             traceback.print_exc()
             self._emit("error", {"message": f"Saving the recording failed: {error}"})
         finally:
+            self._release_canary()
             self._session = None
             self._phase = "idle"
             if self._close_when_saved and self._window is not None:
@@ -300,6 +412,7 @@ class Api:
         while True:
             with self._lock:
                 if not self._import_queue:
+                    self._release_canary()
                     self._importer = None
                     break
                 path = self._import_queue.pop(0)
@@ -315,6 +428,7 @@ class Api:
     def _import_one(self, ffmpeg: str, path: Path) -> None:
         name = path.name
         folder = _new_folder(recordings_dir())
+        refiner = self._refiner()  # the quality chosen when this file's turn comes
         pace: list[float] = []  # when the transcript began, and how many seconds of the file were done then
 
         def progress(stage: str, done: float, total: float) -> None:
@@ -337,7 +451,7 @@ class Api:
 
         try:
             result = transcribe_file(self._model, ffmpeg, path, folder, progress=progress, lines=lines,
-                                     stopped=self._import_stop.is_set)
+                                     stopped=self._import_stop.is_set, refine=refiner() if refiner else None)
             self._update_import(stage="saving", progress=1.0, eta=0)
             write_text_files(result.segments, folder)
             recording_id = self._library.add(

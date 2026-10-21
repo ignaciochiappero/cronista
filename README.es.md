@@ -4,7 +4,7 @@
 
 **Graba tu pantalla y escribe lo que se dice, en vivo.**
 
-Cronista graba tu pantalla principal, tu micrófono y el sonido de tu computadora, y escribe lo que se dice mientras hablas, en español o en inglés, distinguiéndote de quienes están en la llamada. Al detener, una pasada final sobre toda la grabación escribe la transcripción que se guarda junto al video y, si quieres, una copia del video con subtítulos. Si sueltas sobre ella un archivo de audio o video, en cualquier formato, también escribe su transcripción. Todo ocurre en tu computadora: el modelo de voz corre en ella y nada se envía a ningún lado.
+Cronista graba tu pantalla principal, tu micrófono y el sonido de tu computadora, y escribe lo que se dice mientras hablas, en español o en inglés, distinguiéndote de quienes están en la llamada. Al detener, una pasada final sobre toda la grabación escribe la transcripción que se guarda junto al video y, si quieres, una copia del video con subtítulos. Si sueltas sobre ella un archivo de audio o video, en cualquier formato, también escribe su transcripción. Todo ocurre en tu computadora: los modelos de voz corren en ella y nada se envía a ningún lado.
 
 [Read in English](README.md)
 
@@ -37,6 +37,7 @@ La primera vez, una guía corta te muestra la app. El botón **Guía** la vuelve
 |---|---|
 | **Grabar** | Toda tu pantalla principal en su resolución, tu micrófono y el sonido de la computadora, mezclados. Hasta cuatro horas por grabación. |
 | **Leer en vivo** | Las palabras aparecen a medida que se dicen. La transcripción que se guarda sale de una pasada final sobre toda la grabación, que es más precisa. |
+| **Elegir la calidad** | **Transcripción: Media-baja** es rápida, la de siempre (Parakeet, de NVIDIA). **Alta** es más precisa y más lenta: Canary, también de NVIDIA, vuelve a escribir la transcripción final, de grabaciones y de archivos. La primera vez que la eliges descarga su modelo, de alrededor de 1 GB, desde Hugging Face; después funciona sin conexión también. En dos minutos de una reunión real en español escuchó 14 palabras que Parakeet se había perdido y corrigió términos que escribía mal, en poco más del doble de tiempo. |
 | **Transcribir un archivo** | Suelta un audio o video en cualquier parte de la ventana, en cualquier formato que lea FFmpeg (MP3, WAV, M4A, OGG, FLAC, MP4, MKV, MOV, WebM y más), o haz clic en **Transcribir un archivo**. La transcripción aparece a medida que se escribe y queda en el historial como una grabación; si sueltas varios, esperan su turno. El archivo no se copia: **Reproducir** y **Carpeta** lo abren donde está, y **Eliminar** quita solo su transcripción. |
 | **Saber quién habló** | Tu micrófono y el sonido de la computadora se transcriben por separado, así cada línea dice si fuiste tú o la llamada. Ponle nombre a cada uno con un clic en su etiqueta; las etiquetas de una grabación se pueden cambiar después desde su transcripción. |
 | **Subtitular** | **Video subtitulado** hace `recording-subtitled.mp4`, con la transcripción y quién dijo cada línea en pantalla. Mientras se hace, el botón se va llenando y dice cuánto falta. Activa **Copia subtitulada** para que se haga cada vez que termina una grabación. |
@@ -67,7 +68,7 @@ Un archivo transcrito también tiene su carpeta ahí, con su `transcript.srt` y 
 |---|---|
 | Windows 11, 64 bits | Se desarrolló y probó en él. Windows 10 no está probado. |
 | Una tarjeta gráfica que codifique H.264 | La pantalla la codifica la tarjeta gráfica, a través de Media Foundation. |
-| Alrededor de 1 GB de disco | Para la app, su modelo de voz y FFmpeg. Las grabaciones ocupan más. |
+| Alrededor de 1 GB de disco | Para la app, su modelo de voz y FFmpeg; 1 GB más con la calidad **Alta**, cuyo modelo además ocupa alrededor de 1 GB de memoria mientras escribe. Las grabaciones ocupan más. |
 
 ## Cómo está hecha
 
@@ -97,4 +98,4 @@ Para armar el instalador, sigue los pasos de [Build the installer](README.md#bui
 
 Cronista es de código abierto, bajo la [Licencia Apache 2.0](LICENSE). Copyright 2026 Nacho Chiappero. Ver [NOTICE](NOTICE).
 
-El instalador también incluye FFmpeg (LGPL v3), el modelo de voz Parakeet TDT de NVIDIA (CC BY 4.0) y Python con los paquetes que lista [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), cada uno con su propia licencia.
+El instalador también incluye FFmpeg (LGPL v3), el modelo de voz Parakeet TDT de NVIDIA (CC BY 4.0) y Python con los paquetes que lista [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), cada uno con su propia licencia. La calidad **Alta** descarga el modelo de voz Canary 1B v2 de NVIDIA (CC BY 4.0).

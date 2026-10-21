@@ -65,9 +65,14 @@ def segments_from_tokens(
     return segments
 
 
-def run_final_pass(model, audio: np.ndarray, sample_rate: int = 16_000) -> list[TranscriptionSegment]:
+def run_final_pass(model, audio: np.ndarray, sample_rate: int = 16_000, *, refine=None) -> list[TranscriptionSegment]:
+    """refine(audio, tokens, timestamps, sample_rate), when given, may write the words again before
+    they become lines (canary_pass.CanaryPass does, for high quality)."""
     result = model.with_timestamps().recognize(audio, sample_rate=sample_rate)
-    return segments_from_tokens(list(result.tokens or []), list(result.timestamps or []), len(audio) / sample_rate)
+    tokens, timestamps = list(result.tokens or []), list(result.timestamps or [])
+    if refine is not None:
+        tokens, timestamps = refine(audio, tokens, timestamps, sample_rate)
+    return segments_from_tokens(tokens, timestamps, len(audio) / sample_rate)
 
 
 def find_quiet_cut(audio: np.ndarray, target: int, search: int, frame: int = 1_600) -> int:
@@ -93,7 +98,7 @@ def loudest(audio: np.ndarray, frame: int = 1_600) -> float:
 def run_final_pass_file(model, path, sample_rate: int = 16_000, *, chunk_seconds: float = 90.0,
                         search_seconds: float = 10.0, silence: float = 0.002,
                         on_chunk: Callable[[list[TranscriptionSegment], float], None] | None = None,
-                        stopped: Callable[[], bool] | None = None) -> list[TranscriptionSegment]:
+                        stopped: Callable[[], bool] | None = None, refine=None) -> list[TranscriptionSegment]:
     """The final pass over a recording's raw 16 kHz float32 audio file, in pause-aligned chunks.
 
     One pass over an hour of audio does not fit in memory (the encoder's attention grows with the
@@ -105,7 +110,8 @@ def run_final_pass_file(model, path, sample_rate: int = 16_000, *, chunk_seconds
     is digital silence while nothing plays, and each source is quiet while the other one talks.
 
     A file the user drops shows its transcript as it comes: on_chunk(new_segments, seconds_done) is
-    called after each chunk. When stopped() says so, the pass ends before the next chunk.
+    called after each chunk. When stopped() says so, the pass ends before the next chunk. `refine` is
+    run_final_pass's, for each chunk.
     """
     total = Path(path).stat().st_size // 4
     chunk = int(chunk_seconds * sample_rate)
@@ -124,7 +130,7 @@ def run_final_pass_file(model, path, sample_rate: int = 16_000, *, chunk_seconds
         new: list[TranscriptionSegment] = []
         if loudest(audio) >= silence:
             new = [TranscriptionSegment(segment.start + offset, segment.end + offset, segment.text)
-                   for segment in run_final_pass(model, audio, sample_rate)]
+                   for segment in run_final_pass(model, audio, sample_rate, refine=refine)]
             segments += new
         start = end
         if on_chunk:

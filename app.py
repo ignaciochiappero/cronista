@@ -4,8 +4,11 @@ Run from source with: .venv\\Scripts\\python.exe app.py
   --debug       opens the browser developer tools in the window
   --self-test   records 5 seconds (screen, microphone and computer sound) without a window, checks
                 the result, deletes it, and exits (used to check a packaged build; the report goes
-                to the log file)
+                to the log file). With Canary downloaded it also transcribes in high quality the file
+                CRONISTA_SELF_TEST_SPEECH names (else the recording); with CRONISTA_SELF_TEST_NETWORK
+                set, it downloads Canary's two small files to check HTTPS.
 """
+import os
 import sys
 import time
 from datetime import datetime
@@ -77,6 +80,14 @@ def self_test() -> int:
     transcribed = import_check(api, endings, record["video_path"])
     print(f"self-test: transcribed the video as a dropped file: {transcribed}")
     ok = ok and len(exported) == 3 and transcribed == "imported"
+    if ok and os.environ.get("CRONISTA_SELF_TEST_NETWORK"):
+        fetched = download_check()
+        print(f"self-test: downloaded Canary's small files over HTTPS: {fetched}")
+        ok = fetched == "checked"
+    if ok and api._canary_status()["state"] == "ready":
+        high = high_quality_check(api, endings, os.environ.get("CRONISTA_SELF_TEST_SPEECH") or record["video_path"])
+        print(f"self-test: in high quality: {high}")
+        ok = high.startswith("imported") and not notices
     if ok:
         api.delete(record["id"])
         return 0
@@ -120,23 +131,57 @@ def export_check(record: dict, ffmpeg: str) -> list[str]:
     return written
 
 
-def import_check(api, endings: list, video: str) -> str:
+def import_check(api, endings: list, video: str, said: list | None = None) -> str:
     """Transcribes the recording's video as if it had been dropped on the window, which proves that
     the bundled ffmpeg reports on a file and decodes its sound. Removes that transcript from the
-    history again (its folder only: the video stays). Says how it ended: "imported", or why not."""
+    history again (its folder only: the video stays). Says how it ended: "imported", or why not;
+    `said` gets the transcript."""
+    endings.clear()
     result = api._import_files([video])
     if "error" in result:
         return result["error"]
-    deadline = time.monotonic() + 120
+    deadline = time.monotonic() + 300
     while not endings and time.monotonic() < deadline:
         time.sleep(0.2)
     if not endings:
-        return "no answer in 120 s"
+        return "no answer in 300 s"
     kind, payload = endings[0]
     if kind == "imported":
+        if said is not None:
+            said.append(" ".join(segment["text"] for segment in api.recording(payload["id"])["segments"]))
         api.delete(payload["id"])
         return kind
     return f"{kind}: {payload.get('message', '')}"
+
+
+def high_quality_check(api, endings: list, path: str) -> str:
+    """With Canary downloaded, transcribes `path` in high quality, which proves that Canary loads and
+    writes in this build (CRONISTA_SELF_TEST_SPEECH names a file with speech, for Canary to have words
+    to write again). The quality chosen before is put back. Says how it ended, with the transcript."""
+    chosen = api._load_settings().get("transcription", "standard")
+    api.set_transcription("high")
+    said: list[str] = []
+    try:
+        ended = import_check(api, endings, path, said)
+    finally:
+        api.set_transcription(chosen)
+    return f"{ended}: {said[0][:300] if said else ''}"
+
+
+def download_check() -> str:
+    """Downloads Canary's two small files into a temporary folder through the app's downloader, which
+    proves HTTPS, Hugging Face's redirects and the SHA-256 checks work in this build."""
+    import tempfile
+
+    from cronista.downloads import DownloadFailed, download
+    from cronista.engine.stt_engine import CANARY_FILES
+
+    with tempfile.TemporaryDirectory() as folder:
+        try:
+            download(Path(folder), [file for file in CANARY_FILES if file.size < 1_000_000], progress=lambda *_: None)
+        except DownloadFailed as error:
+            return str(error)
+    return "checked"
 
 
 def main() -> int:

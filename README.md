@@ -4,7 +4,7 @@
 
 **Records your screen and writes down what is said, live.**
 
-Cronista records your main screen, your microphone and the sound of your computer, and writes down what is said while you speak, in English or Spanish, telling you apart from the people on the call. When you stop, a final pass over the whole recording writes the transcript that is saved next to the video, and, if you want, a copy of the video with subtitles. Drop an audio or video file on it, in any format, and it writes that file's transcript too. It all happens on your computer: the speech model runs on it, and nothing is sent anywhere.
+Cronista records your main screen, your microphone and the sound of your computer, and writes down what is said while you speak, in English or Spanish, telling you apart from the people on the call. When you stop, a final pass over the whole recording writes the transcript that is saved next to the video, and, if you want, a copy of the video with subtitles. Drop an audio or video file on it, in any format, and it writes that file's transcript too. It all happens on your computer: the speech models run on it, and nothing is sent anywhere.
 
 [Leer en español](README.es.md)
 
@@ -37,6 +37,7 @@ The first time, a short guide shows you around. **Guide** brings it back.
 |---|---|
 | **Record** | Your whole main screen at its own resolution, your microphone, and the computer's sound, mixed together. Up to four hours per recording. |
 | **Read it live** | The words show up as they are said. The saved transcript comes from a final pass over the whole recording, which is more accurate. |
+| **Choose the quality** | **Transcription: Medium-low** is fast, the one Cronista always used (Parakeet, by NVIDIA). **High** is more accurate and slower: Canary, also by NVIDIA, writes the final transcript again, of recordings and of files. The first time you choose it, it downloads its model, about 1 GB, from Hugging Face; after that it works offline too. On two minutes of a real meeting in Spanish it heard 14 words Parakeet had missed and fixed terms it got wrong, taking a little over twice as long. |
 | **Transcribe a file** | Drop audio or video anywhere on the window, in any format FFmpeg reads (MP3, WAV, M4A, OGG, FLAC, MP4, MKV, MOV, WebM and more), or click **Transcribe a file**. Its transcript shows up as it is written, and it joins the history like a recording; files dropped together wait their turn. The file is not copied: **Play** and **Show in folder** open it where it is, and **Delete** removes only its transcript. |
 | **Know who said it** | Your microphone and the computer's sound are transcribed apart, so every line says whether it was you or the call. Name each with a click on its label; a recording's labels can be renamed later from its transcript. |
 | **Subtitle it** | **Subtitled video** makes `recording-subtitled.mp4`, with the transcript and who said each line on screen. While it is made, the button fills up and says how long is left. Turn on **Subtitled copy** to get it every time a recording stops. |
@@ -67,7 +68,7 @@ A transcribed file gets a folder there too, with its `transcript.srt` and `trans
 |---|---|
 | Windows 11, 64-bit | Developed and tested on it. Windows 10 is untested. |
 | A graphics card that encodes H.264 | The screen is encoded by the graphics card, through Media Foundation. |
-| About 1 GB of disk | For the app, its speech model and FFmpeg. Recordings take more. |
+| About 1 GB of disk | For the app, its speech model and FFmpeg; 1 GB more with **High** quality, whose model also takes about 1 GB of memory while it writes. Recordings take more. |
 
 ## How it is put together
 
@@ -80,6 +81,7 @@ A transcribed file gets a folder there too, with its `transcript.srt` and `trans
 | `cronista/engine/voice_activity.py`, `local_agreement.py` | Phrase detection and steady live text | bavel |
 | `cronista/engine/final_pass.py` | The saved transcript, in pause-aligned chunks of about 90 s, skipping the silent ones | the spike, plus chunking |
 | `cronista/importer.py` | A dropped file: what FFmpeg reports on it (length, sound, pictures), its first audio stream decoded to 16 kHz, and the final pass over it in 30 s chunks whose lines are shown as they come | new; the drop, as in escriba's launcher |
+| `cronista/engine/canary_pass.py`, `cronista/downloads.py` | High quality: Canary writes the final pass again in pieces of up to 24 s cut in the pauses (on 2 minutes in one go it looped), told the language by Parakeet's words (left to itself it assumes English and translates), and its words take the times of Parakeet's they stand for (onnx-asr gives Canary none); a piece it gets wrong keeps Parakeet's. Its model is downloaded once, resumable, each file checked against its SHA-256 | new |
 | `cronista/library.py` | History with full-text search (SQLite FTS5) | escriba's `database.py` |
 | `cronista/export.py`, `language.py` | SRT, plain text, Word, and PDF (reportlab, with Segoe UI embedded), headed in the page's language, with who said what | escriba's `document.py`, plus the PDF |
 | `cronista/subtitles.py` | The subtitled copy: the transcript as ASS, drawn by FFmpeg's libass and re-encoded on the graphics card | new |
@@ -128,4 +130,4 @@ The bundled FFmpeg must be an LGPL build. The spec takes the `ffmpeg.exe` that `
 
 Cronista is open source under the [Apache License 2.0](LICENSE). Copyright 2026 Nacho Chiappero. See [NOTICE](NOTICE).
 
-The installer also contains FFmpeg (LGPL v3), the Parakeet TDT speech model by NVIDIA (CC BY 4.0), and Python with the packages listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), each under its own license.
+The installer also contains FFmpeg (LGPL v3), the Parakeet TDT speech model by NVIDIA (CC BY 4.0), and Python with the packages listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), each under its own license. **High** quality downloads the Canary 1B v2 speech model by NVIDIA (CC BY 4.0).

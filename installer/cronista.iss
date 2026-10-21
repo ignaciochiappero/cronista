@@ -2,8 +2,8 @@
 ; Build: "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" installer\cronista.iss
 ;
 ; Per-user install under %LOCALAPPDATA%\Programs: no administrator rights and no UAC prompt.
-; Uninstalling removes the app only; recordings (Videos\Cronista) and the history
-; (%LOCALAPPDATA%\Cronista) stay, since they are the user's.
+; Uninstalling removes the app and the model downloaded for high quality; recordings
+; (Videos\Cronista) and the history (%LOCALAPPDATA%\Cronista) stay, since they are the user's.
 
 #define AppName "Cronista"
 #define AppVersion "0.7.1"
@@ -41,3 +41,7 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\Cronista.exe"; Tasks: desktop
 
 [Run]
 Filename: "{app}\Cronista.exe"; Description: "Open Cronista"; Flags: nowait postinstall skipifsilent
+
+[UninstallDelete]
+; Canary, downloaded the first time high quality is chosen: about 1 GB that is the app's, not the user's.
+Type: filesandordirs; Name: "{localappdata}\Cronista\models"

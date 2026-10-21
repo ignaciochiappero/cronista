@@ -124,6 +124,22 @@ def test_a_file_is_transcribed_and_its_decoded_audio_removed(tmp_path):
 
 
 @needs_ffmpeg
+def test_in_high_quality_the_refiner_writes_the_words_again(tmp_path):
+    talk = make(tmp_path, "talk.flac", *SINE)
+    folder = tmp_path / "transcript"
+    folder.mkdir()
+    lines = []
+
+    def refine(audio, tokens, timestamps, sample_rate):
+        return [" A", " clear", " tone."], [0.2, 0.4, 0.6]
+
+    result = transcribe_file(FakeModel(), ffmpeg, talk, folder, progress=lambda *_: None, lines=lines.extend,
+                             stopped=lambda: False, refine=refine)
+    assert [segment.text for segment in result.segments] == ["A clear tone."]
+    assert [segment.text for segment in lines] == ["A clear tone."]  # what shows while it is written, too
+
+
+@needs_ffmpeg
 def test_a_video_without_sound_says_so(tmp_path):
     screen = make(tmp_path, "screen.mp4", *PICTURE, "-c:v", "mpeg4")
     with pytest.raises(ImportFailed, match="no sound"):

@@ -224,6 +224,11 @@
   #transcript .who:hover { box-shadow: 0 0 0 1px currentColor inset; }
   .who input { width: 10ch; border: 0; padding: 0; border-radius: 0; background: transparent; color: inherit; font: inherit; }
   .switch.small { padding: 4px 10px 4px 6px; font-size: 13px; }
+  /* Transcription quality: medium-low (Parakeet) or high (Canary, downloaded the first time, filling up meanwhile). */
+  .pick { display: inline-flex; align-items: center; gap: 8px; }
+  .pick .segmented button { font-size: 12.5px; padding: 3px 10px; }
+  .pick .segmented button.working { position: relative; isolation: isolate; overflow: hidden; color: var(--text); font-variant-numeric: tabular-nums; }
+  .pick .segmented button.working::before { content: ""; position: absolute; inset: 0 auto 0 0; z-index: -1; width: var(--done, 0%); background: var(--accent-soft); transition: width .6s ease; }
   @keyframes rise { from { opacity: 0; transform: translateY(3px); } }
 
   .detail { padding: 18px 20px 6px; }
@@ -388,6 +393,13 @@
             <button class="chip mic" data-source="mic" data-i18n-title="labelTip"><i></i><span class="name"></span><svg class="icon"><use href="#i-pencil"/></svg></button>
             <button class="chip computer" data-source="computer" data-i18n-title="labelTip"><i></i><span class="name"></span><svg class="icon"><use href="#i-pencil"/></svg></button>
             <span class="spacer"></span>
+            <span class="pick" data-tour="transcription">
+              <span data-i18n="transcription"></span>
+              <span class="segmented">
+                <button id="transcriptionStandard" aria-pressed="true" data-i18n-title="standardTitle"><span data-i18n="standard"></span></button>
+                <button id="transcriptionHigh" aria-pressed="false"><span id="highText"></span></button>
+              </span>
+            </span>
             <label class="switch small" id="subtitlesOption" data-tour="subtitles" data-i18n-title="subtitlesTitle">
               <input type="checkbox" id="subtitles"><span class="track"></span><span data-i18n="subtitlesSwitch"></span>
             </label>
@@ -486,6 +498,15 @@
       hintIdle: "Records your main screen and microphone.", hintIdleComputer: "Records your main screen, your microphone and the computer's sound.",
       hintStarting: "Starting the recorder…", hintRecording: "Press again to stop. The final transcript comes right after.",
       hintFinishing: "Writing the final transcript. A few seconds per minute recorded.",
+      finishingAt: (pct) => `Writing the transcript ${pct}%`,
+      hintFinishingAt: (pct, eta) => `Writing the final transcript · ${pct}%` + (eta == null ? ""
+        : eta < 60 ? " · less than a minute left" : Math.round(eta / 60) === 1 ? " · about a minute left" : ` · about ${Math.round(eta / 60)} min left`),
+      transcription: "Transcription", standard: "Medium-low", high: "High", highDownload: "High · 1 GB",
+      standardTitle: "Fast: Parakeet, by NVIDIA, writes the final transcript",
+      highTitle: "More accurate and slower: Canary, by NVIDIA, writes the final transcript and those of files again. The first time it downloads 1 GB from huggingface.co",
+      downloadingAt: (pct) => `Downloading ${pct}%`,
+      downloadingTitle: "Downloading Canary, 1 GB. Choose Medium-low to stop; it goes on from there next time",
+      highReady: "High quality is ready",
       startRecording: "Start recording", stopRecording: "Stop recording",
       noMic: "No microphone found", nothingMatches: "Nothing said matches that.", noRecordings: "Your recordings show up here.",
       noSpeech: "No speech was transcribed.", noSpeechHere: "No speech was transcribed in this recording.",
@@ -525,6 +546,7 @@
         { target: "mic", title: "Your microphone", body: "Choose the microphone to record. Cronista remembers it for next time." },
         { target: "computer", title: "The computer's sound", body: "On: what plays on the computer, a call or a video, is recorded and transcribed too. With speakers, headphones avoid an echo." },
         { target: "voices", title: "Who said what", body: "Your microphone and the computer's sound are transcribed apart, so every line says who said it. Click a label to name it. Subtitled copy also makes the video with subtitles." },
+        { target: "transcription", title: "Transcription quality", body: "Medium-low is fast, the one Cronista always used. High is more accurate and slower: Canary, by NVIDIA, writes the final transcript again, of recordings and files. The first time it downloads 1 GB." },
         { target: "quality", title: "Video quality", body: "Balanced is the best trade-off. Best quality keeps every detail; Smallest files saves space. Your graphics card does the encoding." },
         { target: "record", title: "Record", body: "Press to start and again to stop. Cronista records your whole main screen, at its own resolution." },
         { target: "live", preview: "live", title: "Live transcript", body: "What is said shows up as you speak, in Spanish or English. When you stop, a final pass writes the transcript that gets saved." },
@@ -551,6 +573,15 @@
       hintIdle: "Graba tu pantalla principal y el micrófono.", hintIdleComputer: "Graba tu pantalla principal, el micrófono y el sonido de la computadora.",
       hintStarting: "Iniciando la grabación…", hintRecording: "Vuelve a pulsar para detener. La transcripción final llega enseguida.",
       hintFinishing: "Escribiendo la transcripción final. Unos segundos por minuto grabado.",
+      finishingAt: (pct) => `Escribiendo la transcripción ${pct} %`,
+      hintFinishingAt: (pct, eta) => `Escribiendo la transcripción final · ${pct} %` + (eta == null ? ""
+        : eta < 60 ? " · falta menos de un minuto" : Math.round(eta / 60) === 1 ? " · falta un minuto" : ` · faltan unos ${Math.round(eta / 60)} min`),
+      transcription: "Transcripción", standard: "Media-baja", high: "Alta", highDownload: "Alta · 1 GB",
+      standardTitle: "Rápida: Parakeet, de NVIDIA, escribe la transcripción final",
+      highTitle: "Más precisa y más lenta: Canary, de NVIDIA, vuelve a escribir la transcripción final y la de los archivos. La primera vez descarga 1 GB de huggingface.co",
+      downloadingAt: (pct) => `Descargando ${pct} %`,
+      downloadingTitle: "Descargando Canary, 1 GB. Elige Media-baja para detenerlo; sigue desde ahí la próxima vez",
+      highReady: "La calidad alta está lista",
       startRecording: "Empezar a grabar", stopRecording: "Detener la grabación",
       noMic: "No se encontró ningún micrófono", nothingMatches: "Nada de lo dicho coincide.", noRecordings: "Aquí aparecen tus grabaciones.",
       noSpeech: "No se transcribió ninguna voz.", noSpeechHere: "En esta grabación no se transcribió ninguna voz.",
@@ -590,6 +621,7 @@
         { target: "mic", title: "Tu micrófono", body: "Elige el micrófono para grabar. Cronista lo recuerda para la próxima vez." },
         { target: "computer", title: "El sonido de la computadora", body: "Activado: lo que suena en la computadora, una llamada o un video, también se graba y se transcribe. Con altavoces, usar auriculares evita el eco." },
         { target: "voices", title: "Quién dijo qué", body: "Tu micrófono y el sonido de la computadora se transcriben por separado, así cada línea dice quién habló. Haz clic en una etiqueta para ponerle nombre. Copia subtitulada hace además el video con subtítulos." },
+        { target: "transcription", title: "Calidad de la transcripción", body: "Media-baja es rápida, la de siempre. Alta es más precisa y más lenta: Canary, de NVIDIA, vuelve a escribir la transcripción final, de grabaciones y de archivos. La primera vez descarga 1 GB." },
         { target: "quality", title: "Calidad del video", body: "Equilibrada es la mejor relación. Máxima calidad conserva cada detalle; Archivos más pequeños ahorra espacio. La tarjeta gráfica se encarga de la codificación." },
         { target: "record", title: "Grabar", body: "Pulsa para empezar y otra vez para detener. Cronista graba toda tu pantalla principal, en su resolución." },
         { target: "live", preview: "live", title: "Transcripción en vivo", body: "Lo que se dice aparece mientras hablas, en español o en inglés. Al detener, una pasada final escribe la transcripción que se guarda." },
@@ -632,15 +664,23 @@
         "This file has no pictures to put the subtitles on.": "Este archivo no tiene imagen para ponerle subtítulos.",
         "Reading the file's sound failed:": "No se pudo leer el sonido del archivo:",
         "Transcribing the file failed:": "No se pudo transcribir el archivo:",
+        "The downloaded model is not the expected one. Try again.": "El modelo descargado no es el esperado. Prueba de nuevo.",
+        "Downloading the model failed (the connection ended early). Check the connection and try again.":
+          "No se pudo descargar el modelo (la conexión se cortó). Revisa la conexión y prueba de nuevo.",
       },
-      patterns: [[/^(.+) is open in another program\. Close it and try again\.$/, "$1 está abierto en otro programa. Ciérralo y vuelve a intentarlo."]],
+      patterns: [[/^(.+) is open in another program\. Close it and try again\.$/, "$1 está abierto en otro programa. Ciérralo y vuelve a intentarlo."],
+                 [/^Downloading the model failed \((.*)\)\. Check the connection and try again\.$/, "No se pudo descargar el modelo ($1). Revisa la conexión y prueba de nuevo."],
+                 [/^Downloading the model failed \((.*)\)\. Try again\.$/, "No se pudo descargar el modelo ($1). Prueba de nuevo."],
+                 [/^High quality could not be used \((.*)\)\. This transcript was written in medium-low quality\.$/,
+                  "No se pudo usar la calidad alta ($1). Esta transcripción se escribió en calidad media-baja."]],
     },
   };
 
   const $ = (id) => document.getElementById(id);
   const api = () => window.pywebview.api;
   const ui = { lang: "en", phase: "idle", model: "loading", recorderError: "", selected: null, title: "", startedAt: null, timer: null, count: 0, state: null,
-               customLabels: {}, liveLabels: null, subtitling: new Map(), importing: null, dropReady: false };
+               customLabels: {}, liveLabels: null, subtitling: new Map(), importing: null, dropReady: false,
+               transcription: "standard", canary: { state: "missing" }, finishing: null };
   // The names the two audio sources have until the user gives them others (language.py says the same).
   const DEFAULT_LABELS = { en: { mic: "Me", computer: "Others" }, es: { mic: "Yo", computer: "Otros" } };
   const currentLabels = () => ({ ...DEFAULT_LABELS[ui.lang], ...ui.customLabels });
@@ -717,7 +757,10 @@
     else if (ui.model === "error") text = t("modelError");
     else if (ui.phase === "recording") { text = `${t("recording")} ${clock(Date.now() / 1000 - ui.startedAt)}`; status.classList.add("live"); }
     else if (ui.phase === "listening") { text = t("starting"); status.classList.add("live"); }
-    else if (ui.phase === "finishing") { text = t("finishing"); status.classList.add("busy"); }
+    else if (ui.phase === "finishing") {
+      text = ui.finishing ? t("finishingAt")(Math.floor(ui.finishing.progress * 100)) : t("finishing");
+      status.classList.add("busy");
+    }
     else if (ui.importing) { text = t("transcribingPill")(Math.round(ui.importing.progress * 100)); status.classList.add("busy"); }
     else { text = t("ready"); status.classList.add("ready"); }
     $("statusText").textContent = text;
@@ -733,9 +776,11 @@
     document.querySelectorAll(".voices .chip").forEach((chip) => { chip.disabled = busy; });
     document.querySelector('.chip[data-source="computer"]').hidden = !withComputer;
     renderSubtitled();
+    renderTranscription();
     $("hint").textContent = {
       idle: ui.importing ? t("hintImporting") : withComputer ? t("hintIdleComputer") : t("hintIdle"),
-      listening: t("hintStarting"), recording: t("hintRecording"), finishing: t("hintFinishing"),
+      listening: t("hintStarting"), recording: t("hintRecording"),
+      finishing: ui.finishing ? t("hintFinishingAt")(Math.floor(ui.finishing.progress * 100), ui.finishing.eta) : t("hintFinishing"),
     }[ui.phase];
     if (ui.phase === "recording") $("timer").textContent = clock(Date.now() / 1000 - ui.startedAt);
     else if (ui.phase === "idle") $("timer").textContent = "00:00";
@@ -897,6 +942,30 @@
       : job.progress > 0 && job.eta != null ? t("subtitlingAt")(Math.floor(job.progress * 100), job.eta) : t("subtitling");
   }
 
+  // Medium-low or high; while Canary downloads, "High" is pressed and fills up with what has arrived.
+  function renderTranscription() {
+    const canary = ui.canary || { state: "missing" };
+    const downloading = canary.state === "downloading";
+    const share = downloading && canary.total ? canary.done / canary.total : 0;
+    const high = $("transcriptionHigh");
+    $("transcriptionStandard").setAttribute("aria-pressed", String(ui.transcription !== "high" && !downloading));
+    high.setAttribute("aria-pressed", String(ui.transcription === "high" || downloading));
+    high.classList.toggle("working", downloading);
+    high.style.setProperty("--done", `${share * 100}%`);
+    $("highText").textContent = downloading ? t("downloadingAt")(Math.floor(share * 100))
+      : canary.state === "ready" ? t("high") : t("highDownload");
+    high.title = downloading ? t("downloadingTitle") : t("highTitle");
+    $("transcriptionStandard").disabled = high.disabled = ui.phase !== "idle";
+  }
+
+  async function chooseTranscription(quality) {
+    const result = await act(() => api().set_transcription(quality));
+    if (!result) return;
+    if (result.transcription) ui.transcription = result.transcription;
+    if (result.downloading && ui.canary.state !== "downloading") ui.canary = { state: "downloading", done: 0, total: 1 };
+    renderTranscription();
+  }
+
   // A label turned into a text box in place: Enter or leaving it saves, Esc puts the old name back.
   function editInPlace(holder, value, save) {
     if (holder.querySelector("input")) return;
@@ -930,8 +999,16 @@
         recording: (p) => { ui.startedAt = p.started_at; setPhase("recording"); },
         partial: (p) => showPartial(p.source, p.committed, p.pending),
         phrase: (p) => addPhrase(p.start, p.text, p.source),
-        finalizing: () => setPhase("finishing"),
-        saved: async (p) => { setPhase("idle"); await refreshList(); await select(p.id); toast(t("saved")); },
+        finalizing: (p) => { ui.finishing = p && p.progress != null ? p : null; setPhase("finishing"); },
+        saved: async (p) => { ui.finishing = null; setPhase("idle"); await refreshList(); await select(p.id); toast(t("saved")); },
+        canary: (p) => {
+          const was = ui.canary.state;
+          ui.canary = p;
+          if (p.transcription) ui.transcription = p.transcription;
+          renderTranscription();
+          if (p.state === "error") toast(say(p.message), true);
+          else if (p.state === "ready" && was === "downloading" && p.transcription === "high") toast(t("highReady"));
+        },
         notice: (p) => toast(say(p.message)),
         subtitling: (p) => { ui.subtitling.set(p.id, p); renderSubtitled(); },
         subtitled: (p) => {
@@ -1152,6 +1229,8 @@
     $("systemAudioOption").hidden = !state.system_audio_supported;
     $("systemAudio").checked = state.settings.system_audio;
     $("subtitles").checked = !!state.settings.subtitles;
+    ui.transcription = state.settings.transcription || "standard";
+    ui.canary = state.canary || { state: "missing" };
     ui.customLabels = { ...(state.settings.labels || {}) };
     applyTheme(state.settings.theme || "system");
     applyLanguage();
@@ -1160,6 +1239,8 @@
 
     $("systemAudio").onchange = render;
     $("subtitles").onchange = () => api().save_preferences(null, null, null, $("subtitles").checked);
+    $("transcriptionStandard").onclick = () => chooseTranscription("standard");
+    $("transcriptionHigh").onclick = () => { if (ui.canary.state !== "downloading") chooseTranscription("high"); };
     $("themeButton").onclick = (e) => { e.stopPropagation(); openThemes($("themes").hidden); };
     $("themeGrid").addEventListener("click", (e) => {
       const choice = e.target.closest("[data-theme-id]");

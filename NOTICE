@@ -20,4 +20,5 @@ Copyright 2026 Google LLC, licensed under the Apache License, Version 2.0.
 
 The installer also contains third-party software under its own licenses,
 FFmpeg (LGPL v3) and the Parakeet TDT speech model (CC BY 4.0) among them.
+High transcription quality downloads the Canary 1B v2 speech model (CC BY 4.0).
 See THIRD-PARTY-NOTICES.md.

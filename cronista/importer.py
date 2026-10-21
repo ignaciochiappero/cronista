@@ -100,12 +100,13 @@ def decode_audio(ffmpeg: str, path: Path, target: Path, *, progress: Callable[[f
 def transcribe_file(model, ffmpeg: str, path: Path, folder: Path, *,
                     progress: Callable[[str, float, float], None],
                     lines: Callable[[list[TranscriptionSegment]], None],
-                    stopped: Callable[[], bool]) -> ImportResult:
+                    stopped: Callable[[], bool], refine=None) -> ImportResult:
     """The transcript of the file at `path`, made in `folder`, which is left as it was.
 
     progress(stage, done, total): stage "reading" then "transcribing", with how many seconds of the
     file are done out of its length; lines(segments) gets each chunk's transcript as soon as it is done;
-    stopped() is asked between steps, and when it says so, Cancelled is raised.
+    stopped() is asked between steps, and when it says so, Cancelled is raised. `refine` (high quality)
+    is the final pass's.
     """
     path, folder = Path(path), Path(folder)
     info = probe(ffmpeg, path)
@@ -125,7 +126,7 @@ def transcribe_file(model, ffmpeg: str, path: Path, folder: Path, *,
             progress("transcribing", seconds, total)
 
         segments = run_final_pass_file(model, audio, chunk_seconds=CHUNK_SECONDS, search_seconds=SEARCH_SECONDS,
-                                       on_chunk=chunk_done, stopped=stopped)
+                                       on_chunk=chunk_done, stopped=stopped, refine=refine)
         if stopped():
             raise Cancelled
     finally:

@@ -7,6 +7,8 @@ from docx import Document
 
 import cronista.app_api as app_api
 from cronista import importer
+from cronista.downloads import DownloadCancelled, DownloadFailed, RemoteFile
+from cronista.engine.canary_pass import CanaryPass
 from cronista.engine.transcript import TranscriptionSegment
 
 
@@ -113,7 +115,7 @@ def a_file(tmp_path, name="Interview with Laura.m4a", size=1000):
 def fake_transcribe(said="Thanks for coming.", *, has_video=False, wait=None):
     """Stands in for importer.transcribe_file: reports its progress and says `said`, or waits for a stop."""
 
-    def transcribe(model, ffmpeg, path, folder, *, progress, lines, stopped):
+    def transcribe(model, ffmpeg, path, folder, *, progress, lines, stopped, refine=None):
         progress("reading", 0.0, 12.0)
         if wait is not None:
             while not stopped():
@@ -229,6 +231,27 @@ def test_a_drop_while_recording_is_refused_without_ending_the_recording(api, tmp
     assert not any(kind == "error" for kind, _ in importing.events)  # the page ends the recording on "error"
 
 
+def test_a_dropped_file_in_high_quality_is_written_again_by_canary(api, tmp_path, monkeypatch, importing,
+                                                                     canary_files):
+    canary_here(api, canary_files)
+    assert api.set_transcription("high") == {"ok": True, "transcription": "high"}
+    loaded = object()
+    monkeypatch.setattr(app_api, "load_canary", lambda folder, threads: loaded)
+    refines = []
+    plain = fake_transcribe()
+
+    def transcribe(model, ffmpeg, path, folder, *, progress, lines, stopped, refine=None):
+        refines.append(refine)
+        return plain(model, ffmpeg, path, folder, progress=progress, lines=lines, stopped=stopped)
+
+    monkeypatch.setattr(app_api, "transcribe_file", transcribe)
+    api._import_files([str(a_file(tmp_path))])
+    importing.until("imported")
+    assert isinstance(refines[0], CanaryPass) and refines[0].model is loaded
+    wait_until(lambda: api._importer is None)
+    assert api._canary is None  # about 1 GB of memory back once the files are done
+
+
 def test_a_transcribed_files_documents_say_when_it_was_transcribed(api, tmp_path, monkeypatch, importing):
     monkeypatch.setattr(app_api, "transcribe_file", fake_transcribe(has_video=True))
     api._import_files([str(a_file(tmp_path, "Demo.mkv"))])
@@ -237,3 +260,124 @@ def test_a_transcribed_files_documents_say_when_it_was_transcribed(api, tmp_path
     paragraphs = [paragraph.text for paragraph in Document(api.export_word(recording_id, "en")["path"]).paragraphs]
     assert any(text.startswith("Transcribed on ") for text in paragraphs)
     assert not any(text.startswith("Recorded on ") for text in paragraphs)
+
+
+# --- transcription quality: medium-low (Parakeet) or high (Canary, downloaded the first time) -----
+
+@pytest.fixture
+def canary_files(monkeypatch):
+    """Canary as three tiny files, so it downloads in an instant."""
+    files = [RemoteFile(name, f"https://example.invalid/{name}", size, "-")
+             for name, size in (("config.json", 3), ("vocab.txt", 5), ("encoder-model.int8.onnx", 8))]
+    monkeypatch.setattr(app_api, "CANARY_FILES", files)
+    return files
+
+
+def canary_here(api, files):
+    folder = api._canary_folder()
+    folder.mkdir(parents=True, exist_ok=True)
+    for file in files:
+        (folder / file.name).write_bytes(b"x" * file.size)
+
+
+def fake_download(*, wait=None, fail=None):
+    """Stands in for downloads.download: writes the files, or waits for a stop, or fails."""
+
+    def download(folder, files, *, progress, stopped):
+        total = sum(file.size for file in files)
+        progress(0, total)
+        if wait is not None:
+            while not stopped():
+                wait.wait(0.01)
+            raise DownloadCancelled
+        if fail:
+            raise DownloadFailed(fail)
+        folder.mkdir(parents=True, exist_ok=True)
+        done = 0
+        for file in files:
+            (folder / file.name).write_bytes(b"x" * file.size)
+            done += file.size
+            progress(done, total)
+
+    return download
+
+
+def wait_until(check, timeout=5.0):
+    import time
+
+    deadline = time.monotonic() + timeout
+    while not check():
+        assert time.monotonic() < deadline, "timed out"
+        time.sleep(0.01)
+
+
+def test_high_quality_downloads_canary_once_and_then_is_chosen(api, monkeypatch, importing, canary_files):
+    monkeypatch.setattr(app_api, "download", fake_download())
+    assert api.state()["canary"] == {"state": "missing"}
+    assert api.state()["settings"]["transcription"] == "standard"
+    assert api.set_transcription("high") == {"ok": True, "downloading": True}
+    wait_until(lambda: api.state()["canary"]["state"] == "ready")
+    events = [payload for kind, payload in importing.events if kind == "canary"]
+    assert any(event["state"] == "downloading" and event["total"] == 16 for event in events)
+    assert events[-1] == {"state": "ready", "transcription": "high"}
+    assert api.state()["settings"]["transcription"] == "high"
+    assert api.set_transcription("high") == {"ok": True, "transcription": "high"}  # here now: no download
+    assert api.set_transcription("standard") == {"ok": True, "transcription": "standard"}
+    assert api.state()["settings"]["transcription"] == "standard"
+
+
+def test_choosing_medium_low_while_canary_downloads_stops_the_download(api, monkeypatch, importing, canary_files):
+    import threading
+
+    monkeypatch.setattr(app_api, "download", fake_download(wait=threading.Event()))
+    api.set_transcription("high")
+    wait_until(lambda: api.state()["canary"]["state"] == "downloading")
+    api.set_transcription("standard")
+    wait_until(lambda: api.state()["canary"]["state"] == "missing")
+    assert [p for k, p in importing.events if k == "canary"][-1] == {"state": "missing", "transcription": "standard"}
+
+
+def test_a_download_that_fails_says_why_and_stays_medium_low(api, monkeypatch, importing, canary_files):
+    message = "Downloading the model failed (no network). Check the connection and try again."
+    monkeypatch.setattr(app_api, "download", fake_download(fail=message))
+    api.set_transcription("high")
+    wait_until(lambda: [p for k, p in importing.events if k == "canary"][-1]["state"] != "downloading")
+    assert [p for k, p in importing.events if k == "canary"][-1] == {"state": "error", "message": message,
+                                                                    "transcription": "standard"}
+    assert api.state()["canary"] == {"state": "missing"}
+
+
+def test_a_recording_in_high_quality_gets_canary_for_each_source(api, monkeypatch, importing, canary_files):
+    made = []
+
+    class FakeSession:
+        def __init__(self, model, recorder, settings, folder, on_event, *, refiner=None):
+            made.append(refiner)
+
+        def start(self):
+            pass
+
+    monkeypatch.setattr(app_api, "RecordingSession", FakeSession)
+    api._recorder, api._model = SimpleNamespace(), object()
+    assert api.start(None, "balanced")["ok"] and made == [None]  # medium-low: Parakeet alone
+    api._phase = "idle"
+    canary_here(api, canary_files)
+    api.set_transcription("high")
+    loaded = object()
+    monkeypatch.setattr(app_api, "load_canary", lambda folder, threads: loaded)
+    assert api.start(None, "balanced")["ok"]
+    first, second = made[1](), made[1]()
+    assert isinstance(first, CanaryPass) and first is not second and first.model is second.model is loaded
+
+
+def test_if_canary_does_not_load_the_transcript_is_medium_low_and_the_page_is_told(api, monkeypatch, importing,
+                                                                                    canary_files):
+    canary_here(api, canary_files)
+    api.set_transcription("high")
+
+    def broken(folder, threads):
+        raise RuntimeError("bad file")
+
+    monkeypatch.setattr(app_api, "load_canary", broken)
+    assert api._refiner()() is None
+    assert importing.until("notice")[0]["message"].startswith("High quality could not be used (bad file).")
