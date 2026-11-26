@@ -102,6 +102,38 @@ pub fn paint_studio_backdrop(
     }
 }
 
+/// Paints a silky GPU-interpolated vertical fade mask along the top or bottom edge of a ScrollArea
+/// so clipped scroll content melts smoothly into `bg` instead of hard-cutting.
+pub fn paint_scroll_fade(painter: &Painter, rect: Rect, bg: Color32, height: f32, is_top: bool) {
+    let h = height.min(rect.height() * 0.45);
+    if h <= 1.0 {
+        return;
+    }
+    let solid = Color32::from_rgba_unmultiplied(bg.r(), bg.g(), bg.b(), 248);
+    let mid = Color32::from_rgba_unmultiplied(bg.r(), bg.g(), bg.b(), 110);
+    let clear = Color32::from_rgba_unmultiplied(bg.r(), bg.g(), bg.b(), 0);
+
+    let (y0, y1, y2) = if is_top {
+        (rect.top(), rect.top() + h * 0.45, rect.top() + h)
+    } else {
+        (rect.bottom(), rect.bottom() - h * 0.45, rect.bottom() - h)
+    };
+
+    let mut mesh = egui::Mesh::default();
+    mesh.colored_vertex(pos2(rect.left(), y0), solid);
+    mesh.colored_vertex(pos2(rect.right(), y0), solid);
+    mesh.colored_vertex(pos2(rect.left(), y1), mid);
+    mesh.colored_vertex(pos2(rect.right(), y1), mid);
+    mesh.colored_vertex(pos2(rect.left(), y2), clear);
+    mesh.colored_vertex(pos2(rect.right(), y2), clear);
+
+    mesh.add_triangle(0, 1, 2);
+    mesh.add_triangle(1, 3, 2);
+    mesh.add_triangle(2, 3, 4);
+    mesh.add_triangle(3, 5, 4);
+    painter.add(egui::Shape::mesh(mesh));
+}
+
 /// Paints a crisp 1px top-edge specular light sheen along the top of an elevated card.
 pub fn paint_card_specular(painter: &Painter, rect: Rect, radius: f32, p: &ThemePalette) {
     let inset = radius.max(10.0);

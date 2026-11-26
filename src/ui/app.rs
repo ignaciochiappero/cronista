@@ -17,8 +17,8 @@ use crate::ui::icons::{paint_cronista_logo, paint_icon, Icon};
 use crate::ui::theme::{apply_to_egui, palette_for, ThemePalette};
 use crate::ui::widgets::{
     action_button, action_button_styled, dashed_import_tile, dot_matrix_loader, ghost_button,
-    paint_card_specular, paint_dashed_rect, paint_studio_backdrop, record_button, speaker_pill,
-    studio_waveform, toggle_pill, window_control_button,
+    paint_card_specular, paint_dashed_rect, paint_scroll_fade, paint_studio_backdrop,
+    record_button, speaker_pill, studio_waveform, toggle_pill, window_control_button,
 };
 use egui::{
     pos2, vec2, Align, Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Frame,
@@ -653,7 +653,7 @@ impl CronistaApp {
 
                 // Scrollable history list (leaves generous room for footer drop tile)
                 let list_h = (ui.available_height() - 78.0).max(90.0);
-                ScrollArea::vertical()
+                let sb_scroll = ScrollArea::vertical()
                     .max_height(list_h)
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
@@ -813,6 +813,14 @@ impl CronistaApp {
                             self.select_recording(&id);
                         }
                     });
+                if sb_scroll.state.offset.y > 2.0 {
+                    paint_scroll_fade(ui.painter(), sb_scroll.inner_rect, p.surface, 20.0, true);
+                }
+                if sb_scroll.state.offset.y + sb_scroll.inner_rect.height()
+                    < sb_scroll.content_size.y - 2.0
+                {
+                    paint_scroll_fade(ui.painter(), sb_scroll.inner_rect, p.surface, 24.0, false);
+                }
 
                 ui.add_space(10.0);
                 let busy = self.phase != Phase::Idle;
@@ -833,12 +841,12 @@ impl CronistaApp {
         let time = ctx.input(|i| i.time);
         let is_rec = matches!(self.phase, Phase::Recording | Phase::Listening);
         egui::CentralPanel::default()
-            .frame(Frame::new().fill(p.bg).inner_margin(Margin::symmetric(28, 22)))
+            .frame(Frame::new().fill(p.bg).inner_margin(Margin::symmetric(28, 16)))
             .show(ctx, |ui| {
                 // Architectural dot-grid + ambient studio aura behind the workspace
                 paint_studio_backdrop(ui.painter(), ui.max_rect().expand(28.0), p, is_rec, time);
 
-                ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                let main_scroll = ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
                     let col_w = ui.available_width().min(860.0);
                     ui.vertical_centered(|ui| {
                         ui.set_max_width(col_w);
@@ -953,11 +961,11 @@ impl CronistaApp {
                             }
 
                             self.draw_recorder_card(ui, p);
-                            ui.add_space(16.0);
+                            ui.add_space(12.0);
 
                             if self.importing.is_some() && self.phase == Phase::Idle {
                                 self.draw_importing_card(ui, p);
-                                ui.add_space(16.0);
+                                ui.add_space(12.0);
                             }
 
                             if self.phase != Phase::Idle {
@@ -970,6 +978,14 @@ impl CronistaApp {
                         });
                     });
                 });
+                if main_scroll.state.offset.y > 2.0 {
+                    paint_scroll_fade(ui.painter(), main_scroll.inner_rect, p.bg, 22.0, true);
+                }
+                if main_scroll.state.offset.y + main_scroll.inner_rect.height()
+                    < main_scroll.content_size.y - 2.0
+                {
+                    paint_scroll_fade(ui.painter(), main_scroll.inner_rect, p.bg, 28.0, false);
+                }
             });
     }
 
@@ -992,7 +1008,7 @@ impl CronistaApp {
             .fill(p.surface)
             .stroke(deck_stroke)
             .corner_radius(CornerRadius::same(18))
-            .inner_margin(Margin::symmetric(22, 18))
+            .inner_margin(Margin::symmetric(20, 14))
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
 
@@ -1146,7 +1162,7 @@ impl CronistaApp {
                     });
                 });
 
-                ui.add_space(18.0);
+                ui.add_space(12.0);
 
                 // ── Center Hero Stage: Machined Record Trigger + Studio Timecode + Acoustic Waveform
                 let hero_avail = ui.available_width();
@@ -1271,14 +1287,14 @@ impl CronistaApp {
                     }
                 });
 
-                ui.add_space(18.0);
+                ui.add_space(12.0);
 
                 // ── Bottom Recessed Studio Console Dock (Capture + Intelligence controls)
                 Frame::new()
                     .fill(p.bg)
                     .stroke(Stroke::new(1.0_f32, p.border))
                     .corner_radius(CornerRadius::same(12))
-                    .inner_margin(Margin::symmetric(14, 12))
+                    .inner_margin(Margin::symmetric(14, 10))
                     .show(ui, |ui| {
                         ui.set_width(ui.available_width());
 
@@ -1347,7 +1363,7 @@ impl CronistaApp {
                             toggle_pill(ui, &mut self.system_audio, s.computer, !busy, false, p);
                         });
 
-                        ui.add_space(10.0);
+                        ui.add_space(8.0);
 
                         // Subtle horizontal hairline separating capture & transcription controls
                         let sep = ui.available_rect_before_wrap();
@@ -1355,7 +1371,7 @@ impl CronistaApp {
                             [pos2(sep.left(), sep.top()), pos2(sep.right(), sep.top())],
                             Stroke::new(1.0_f32, p.border),
                         );
-                        ui.add_space(10.0);
+                        ui.add_space(8.0);
 
                         // Console Row 2: Speaker labels + STT Quality + Live + Subtitles
                         ui.horizontal_wrapped(|ui| {
@@ -1921,10 +1937,9 @@ impl CronistaApp {
 
     fn draw_empty_state(&mut self, ui: &mut egui::Ui, p: &ThemePalette) {
         let s = strings(&self.lang);
-        ui.add_space(4.0);
 
         let w = ui.available_width();
-        let (card_rect, resp) = ui.allocate_exact_size(vec2(w, 286.0), Sense::click());
+        let (card_rect, resp) = ui.allocate_exact_size(vec2(w, 214.0), Sense::click());
         let resp = if self.phase == Phase::Idle {
             resp.on_hover_cursor(egui::CursorIcon::PointingHand)
         } else {
@@ -1964,19 +1979,19 @@ impl CronistaApp {
             5.0,
         );
 
-        // Centered content inside the drop canvas with generous top & bottom padding
+        // Centered content inside the drop canvas with balanced top & bottom breathing room
         ui.allocate_new_ui(
             egui::UiBuilder::new()
-                .max_rect(card_rect.shrink2(vec2(32.0, 28.0)))
+                .max_rect(card_rect.shrink2(vec2(28.0, 14.0)))
                 .layout(Layout::top_down(Align::Center)),
             |ui| {
-                ui.add_space(6.0);
+                ui.add_space(2.0);
                 // Floating glowing studio emblem
-                let (emb_r, _) = ui.allocate_exact_size(Vec2::splat(64.0), Sense::hover());
+                let (emb_r, _) = ui.allocate_exact_size(Vec2::splat(52.0), Sense::hover());
                 let c = emb_r.center();
                 ui.painter().circle_filled(
                     c,
-                    32.0,
+                    26.0,
                     Color32::from_rgba_unmultiplied(
                         p.accent.r(),
                         p.accent.g(),
@@ -1984,10 +1999,10 @@ impl CronistaApp {
                         if hovered { 34 } else { 18 },
                     ),
                 );
-                let tile = Rect::from_center_size(c, Vec2::splat(48.0));
+                let tile = Rect::from_center_size(c, Vec2::splat(42.0));
                 ui.painter().rect(
                     tile,
-                    CornerRadius::same(14),
+                    CornerRadius::same(13),
                     p.surface2,
                     Stroke::new(
                         1.0_f32,
@@ -1995,15 +2010,15 @@ impl CronistaApp {
                     ),
                     egui::StrokeKind::Inside,
                 );
-                paint_cronista_logo(ui.painter(), c, 14.0, p);
+                paint_cronista_logo(ui.painter(), c, 12.5, p);
 
-                ui.add_space(16.0);
+                ui.add_space(9.0);
                 ui.label(
                     RichText::new(s.empty_title)
-                        .font(semibold(18.0))
+                        .font(semibold(17.0))
                         .color(p.text),
                 );
-                ui.add_space(6.0);
+                ui.add_space(3.0);
                 ui.label(
                     RichText::new(if s.is_es {
                         "O arrastra cualquier video o audio aquí para transcribirlo al instante en tu PC."
@@ -2014,7 +2029,7 @@ impl CronistaApp {
                     .color(p.text2),
                 );
 
-                ui.add_space(18.0);
+                ui.add_space(10.0);
                 // Perfectly centered format pill row (measured from actual text widths)
                 let fmts = ["MP4", "MP3", "WAV", "M4A", "MKV", "MOV", "OGG", "FLAC"];
                 let pill_font = FontId::monospace(10.5);
@@ -2053,7 +2068,7 @@ impl CronistaApp {
                     x += *pw + gap;
                 }
 
-                ui.add_space(16.0);
+                ui.add_space(8.0);
                 // Subtle privacy / capability caption with comfortable breathing room from bottom border
                 ui.label(
                     RichText::new(if s.is_es {
@@ -2457,18 +2472,25 @@ impl eframe::App for CronistaApp {
     }
 }
 
-/// Enables native Windows 11 DWM rounded corners (DWMWCP_ROUND) on frameless windows.
+/// Enables native Windows 11 DWM rounded corners (DWMWCP_ROUND) and centers the
+/// window inside the active monitor's usable work area (above the taskbar).
 #[cfg(windows)]
 fn apply_windows_rounded_corners_once() {
     use std::sync::Once;
     static APPLIED: Once = Once::new();
     APPLIED.call_once(|| {
-        use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
+        use windows::Win32::Foundation::{BOOL, HWND, LPARAM, RECT};
         use windows::Win32::Graphics::Dwm::{
             DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
         };
+        use windows::Win32::Graphics::Gdi::{
+            GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTOPRIMARY,
+        };
         use windows::Win32::System::Threading::GetCurrentThreadId;
-        use windows::Win32::UI::WindowsAndMessaging::EnumThreadWindows;
+        use windows::Win32::UI::WindowsAndMessaging::{
+            EnumThreadWindows, GetWindowRect, IsWindowVisible, SetWindowPos, SWP_NOACTIVATE,
+            SWP_NOZORDER,
+        };
 
         unsafe extern "system" fn cb(hwnd: HWND, _lparam: LPARAM) -> BOOL {
             let pref = DWMWCP_ROUND;
@@ -2478,6 +2500,39 @@ fn apply_windows_rounded_corners_once() {
                 &pref as *const _ as *const std::ffi::c_void,
                 std::mem::size_of_val(&pref) as u32,
             );
+
+            if IsWindowVisible(hwnd).as_bool() {
+                let mut wr = RECT::default();
+                if GetWindowRect(hwnd, &mut wr).is_ok() {
+                    let cur_w = wr.right - wr.left;
+                    let cur_h = wr.bottom - wr.top;
+                    if cur_w >= 400 && cur_h >= 300 {
+                        let hmon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
+                        let mut mi = MONITORINFO {
+                            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+                            ..Default::default()
+                        };
+                        if GetMonitorInfoW(hmon, &mut mi).as_bool() {
+                            let work = mi.rcWork;
+                            let work_w = work.right - work.left;
+                            let work_h = work.bottom - work.top;
+                            let w = cur_w.min(work_w);
+                            let h = cur_h.min(work_h);
+                            let x = work.left + (work_w - w) / 2;
+                            let y = work.top + (work_h - h) / 2;
+                            let _ = SetWindowPos(
+                                hwnd,
+                                None,
+                                x,
+                                y,
+                                w,
+                                h,
+                                SWP_NOZORDER | SWP_NOACTIVATE,
+                            );
+                        }
+                    }
+                }
+            }
             BOOL(1)
         }
 
