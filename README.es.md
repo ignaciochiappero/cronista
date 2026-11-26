@@ -17,7 +17,9 @@ Cronista graba tu pantalla principal, tu micrófono y el sonido de tu computador
 
 ## Instalación
 
-Descarga **Cronista-Setup-0.8.0.exe** desde la [página de versiones](https://github.com/ignaciochiappero/cronista/releases/latest) y ejecútalo. Se instala solo para tu usuario, sin permisos de administrador, y agrega un acceso en el menú Inicio. Trae todo lo que necesita: el modelo de voz y FFmpeg.
+Descarga **Cronista-Setup-0.9.0.exe** (o el zip portátil) desde la [página de versiones](https://github.com/ignaciochiappero/cronista/releases/latest) y ejecútalo. Se instala solo para tu usuario, sin permisos de administrador, y agrega un acceso en el menú Inicio.
+
+Desde **v0.9.0**, Cronista es una **app nativa en Rust** (`egui`/`eframe`, ejecutable único de ~12 MB, ~150 MB en reposo, sin WebView2/Chromium), con soporte de grabación de **Pantalla + Audio** y **Solo audio**. Al abrirla por primera vez, un botón de 1 clic descarga el modelo de voz (Parakeet TDT 0.6B v3 int8) y ONNX Runtime en `%LOCALAPPDATA%\Cronista`; FFmpeg se detecta automáticamente desde el `PATH` (`winget install ffmpeg`).
 
 El instalador todavía no está firmado, así que Windows SmartScreen muestra un aviso: elige **Más información** y después **Ejecutar de todas formas**. [SECURITY.md](SECURITY.md) (en inglés) explica qué graba la app, dónde lo guarda y cómo verificar la descarga.
 
@@ -76,14 +78,15 @@ La descripción técnica completa (las piezas, y cómo se sincronizan el sonido 
 
 ## Desarrollo
 
+### Nativo en Rust (v0.9.0+)
+
 ```powershell
-uv venv --python 3.11 .venv
-uv pip install --python .venv\Scripts\python.exe -r pyproject.toml pytest "onnx-asr[hub]"
-.\.venv\Scripts\python.exe app.py
-.\.venv\Scripts\python.exe -m pytest -q
+cargo test
+cargo build --release
+.\target\release\cronista.exe
 ```
 
-FFmpeg tiene que estar en el PATH (`winget install ffmpeg`). El modelo de voz va en `models/parakeet-tdt-0.6b-v3`: si esa carpeta todavía no existe, el primer inicio lo descarga ahí (unos 640 MB, los archivos int8 de [istupakov/parakeet-tdt-0.6b-v3-onnx](https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx)). Después, la app funciona sin conexión.
+Requiere Rust y FFmpeg en el `PATH` (`winget install ffmpeg`). Al iniciar por primera vez sin modelo local, la app ofrece descargarlo con 1 clic en `%LOCALAPPDATA%\Cronista\models\parakeet-tdt-0.6b-v3`.
 
 Para armar el instalador, sigue los pasos de [Build the installer](README.md#build-the-installer).
 

@@ -17,7 +17,9 @@ Cronista records your main screen, your microphone and the sound of your compute
 
 ## Install
 
-Download **Cronista-Setup-0.8.0.exe** from the [Releases page](https://github.com/ignaciochiappero/cronista/releases/latest) and run it. It installs for your user only, without administrator rights, and adds a Start menu shortcut. Everything it needs comes inside: the speech model and FFmpeg.
+Download **Cronista-Setup-0.9.0.exe** (or the portable zip) from the [Releases page](https://github.com/ignaciochiappero/cronista/releases/latest) and run it. It installs for your user only, without administrator rights, and adds a Start menu shortcut.
+
+Starting in **v0.9.0**, Cronista is a **native Rust application** (`egui`/`eframe`, single ~12 MB executable, ~150 MB idle RAM, zero Chromium/WebView2). On first launch, a 1-click setup downloads the speech model (Parakeet TDT 0.6B v3 int8) and ONNX Runtime to `%LOCALAPPDATA%\Cronista`; FFmpeg is discovered automatically on `PATH` (`winget install ffmpeg`).
 
 The installer is not code-signed yet, so Windows SmartScreen warns about it: choose **More info**, then **Run anyway**. [SECURITY.md](SECURITY.md) says what the app records, where it keeps it, and how to check your download.
 
@@ -96,23 +98,33 @@ The screen and the audio are separate FFmpeg processes because in one, a still s
 
 ## Development
 
+### Native Rust (v0.9.0+)
+
+```powershell
+cargo test
+cargo build --release
+.\target\release\cronista.exe
+```
+
+Requires Rust (`stable-x86_64-pc-windows-gnu` + MinGW-w64 or `stable-x86_64-pc-windows-msvc`) and FFmpeg on `PATH` (`winget install ffmpeg`).
+
+### Build the installer
+
+```powershell
+cargo build --release
+New-Item -ItemType Directory -Force dist\Cronista | Out-Null
+Copy-Item target\release\cronista.exe dist\Cronista\Cronista.exe
+Copy-Item LICENSE, NOTICE, THIRD-PARTY-NOTICES.md dist\Cronista\
+& "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\cronista.iss
+```
+
+### Legacy Python (v0.8.0)
+
 ```powershell
 uv venv --python 3.11 .venv
 uv pip install --python .venv\Scripts\python.exe -r pyproject.toml pytest "onnx-asr[hub]"
 .\.venv\Scripts\python.exe app.py
 .\.venv\Scripts\python.exe -m pytest -q
-```
-
-FFmpeg must be on PATH (`winget install ffmpeg`). The speech model lives in `models/parakeet-tdt-0.6b-v3`: when that folder does not exist yet, the first start downloads it there (about 640 MB, the int8 files of [istupakov/parakeet-tdt-0.6b-v3-onnx](https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx)). After that the app works offline.
-
-### Build the installer
-
-```powershell
-.\.venv\Scripts\python.exe tools\make_icon.py                 # only if the logo changed
-$env:FFMPEG_EXE = "C:\path\to\ffmpeg-n9.0-latest-win64-lgpl-9.0\bin\ffmpeg.exe"   # an LGPL build, see below
-.\.venv\Scripts\pyinstaller.exe cronista.spec --noconfirm --clean
-.\dist\Cronista\Cronista.exe --self-test                      # records 5 s with computer sound, transcribes it as a dropped file, checks, deletes; exit code 0 = fine
-& "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\cronista.iss
 ```
 
 PyInstaller puts the app, Python, the model and FFmpeg in `dist\Cronista` (about 890 MB); Inno Setup packs that into `dist\Cronista-Setup-<version>.exe`. The installer installs to `%LOCALAPPDATA%\Programs\Cronista` and adds an uninstaller that keeps the recordings and the history. The packaged app writes its output and errors to `%LOCALAPPDATA%\Cronista\cronista.log`.

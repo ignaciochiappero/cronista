@@ -1,12 +1,12 @@
-; Inno Setup script: turns dist\Cronista (the PyInstaller build) into Cronista-Setup-<version>.exe.
+; Inno Setup script: turns dist\Cronista (the Rust release bundle) into Cronista-Setup-<version>.exe.
 ; Build: "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" installer\cronista.iss
 ;
 ; Per-user install under %LOCALAPPDATA%\Programs: no administrator rights and no UAC prompt.
-; Uninstalling removes the app and the model downloaded for high quality; recordings
+; Uninstalling removes the app and downloaded models; recordings
 ; (Videos\Cronista) and the history (%LOCALAPPDATA%\Cronista) stay, since they are the user's.
 
 #define AppName "Cronista"
-#define AppVersion "0.8.0"
+#define AppVersion "0.9.0"
 
 [Setup]
 AppId={{6F0B2C8E-3D7A-4E1F-9A5B-2C4D8E6F1A30}

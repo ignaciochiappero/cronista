@@ -4,6 +4,7 @@ __pycache__/
 models/
 build/
 dist/
+target/
 build-log.txt
 *.log
 .claude/
