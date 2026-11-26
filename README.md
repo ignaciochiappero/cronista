@@ -118,15 +118,6 @@ Copy-Item LICENSE, NOTICE, THIRD-PARTY-NOTICES.md dist\Cronista\
 & "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\cronista.iss
 ```
 
-### Legacy Python (v0.8.0)
-
-```powershell
-uv venv --python 3.11 .venv
-uv pip install --python .venv\Scripts\python.exe -r pyproject.toml pytest "onnx-asr[hub]"
-.\.venv\Scripts\python.exe app.py
-.\.venv\Scripts\python.exe -m pytest -q
-```
-
 PyInstaller puts the app, Python, the model and FFmpeg in `dist\Cronista` (about 890 MB); Inno Setup packs that into `dist\Cronista-Setup-<version>.exe`. The installer installs to `%LOCALAPPDATA%\Programs\Cronista` and adds an uninstaller that keeps the recordings and the history. The packaged app writes its output and errors to `%LOCALAPPDATA%\Cronista\cronista.log`.
 
 The bundled FFmpeg must be an LGPL build. The spec takes the `ffmpeg.exe` that `FFMPEG_EXE` points to (else the one on PATH), stops if it was configured with `--enable-gpl` or `--enable-nonfree`, and puts the build's `LICENSE.txt` next to it, with its version and configuration in `BUILD.txt`. The installer uses BtbN's static LGPL build of FFmpeg 9.0 (`ffmpeg-n9.0-latest-win64-lgpl-9.0.zip` on the [BtbN/FFmpeg-Builds releases](https://github.com/BtbN/FFmpeg-Builds/releases), unzipped outside the repo). [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) names the exact build and where its source is, so update it when the build changes.
