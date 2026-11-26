@@ -25,7 +25,7 @@ fn main() -> eframe::Result<()> {
     let mut viewport = egui::ViewportBuilder::default()
         .with_title("Cronista")
         .with_decorations(false)
-        .with_inner_size([1140.0, 720.0])
+        .with_inner_size([1140.0, 748.0])
         .with_min_inner_size([920.0, 600.0])
         .with_drag_and_drop(true);
     if let Some(icon) = load_app_icon() {

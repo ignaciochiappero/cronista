@@ -1939,7 +1939,8 @@ impl CronistaApp {
         let s = strings(&self.lang);
 
         let w = ui.available_width();
-        let (card_rect, resp) = ui.allocate_exact_size(vec2(w, 214.0), Sense::click());
+        let h = (ui.available_height() - 10.0).max(236.0);
+        let (card_rect, resp) = ui.allocate_exact_size(vec2(w, h), Sense::click());
         let resp = if self.phase == Phase::Idle {
             resp.on_hover_cursor(egui::CursorIcon::PointingHand)
         } else {
@@ -1979,13 +1980,17 @@ impl CronistaApp {
             5.0,
         );
 
-        // Centered content inside the drop canvas with balanced top & bottom breathing room
+        // Centered content inside the drop canvas with generous balanced top & bottom breathing room
+        let content_h = 180.0_f32;
+        let top_pad = ((card_rect.height() - content_h) * 0.5).max(20.0);
         ui.allocate_new_ui(
             egui::UiBuilder::new()
-                .max_rect(card_rect.shrink2(vec2(28.0, 14.0)))
+                .max_rect(Rect::from_min_max(
+                    pos2(card_rect.left() + 28.0, card_rect.top() + top_pad),
+                    pos2(card_rect.right() - 28.0, card_rect.bottom() - 20.0),
+                ))
                 .layout(Layout::top_down(Align::Center)),
             |ui| {
-                ui.add_space(2.0);
                 // Floating glowing studio emblem
                 let (emb_r, _) = ui.allocate_exact_size(Vec2::splat(52.0), Sense::hover());
                 let c = emb_r.center();
@@ -2012,13 +2017,13 @@ impl CronistaApp {
                 );
                 paint_cronista_logo(ui.painter(), c, 12.5, p);
 
-                ui.add_space(9.0);
+                ui.add_space(10.0);
                 ui.label(
                     RichText::new(s.empty_title)
                         .font(semibold(17.0))
                         .color(p.text),
                 );
-                ui.add_space(3.0);
+                ui.add_space(4.0);
                 ui.label(
                     RichText::new(if s.is_es {
                         "O arrastra cualquier video o audio aquí para transcribirlo al instante en tu PC."
@@ -2029,7 +2034,7 @@ impl CronistaApp {
                     .color(p.text2),
                 );
 
-                ui.add_space(10.0);
+                ui.add_space(13.0);
                 // Perfectly centered format pill row (measured from actual text widths)
                 let fmts = ["MP4", "MP3", "WAV", "M4A", "MKV", "MOV", "OGG", "FLAC"];
                 let pill_font = FontId::monospace(10.5);

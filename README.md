@@ -17,9 +17,9 @@ Cronista records your main screen, your microphone and the sound of your compute
 
 ## Install
 
-Download **Cronista-Setup-0.9.0.exe** (or the portable zip) from the [Releases page](https://github.com/ignaciochiappero/cronista/releases/latest) and run it. It installs for your user only, without administrator rights, and adds a Start menu shortcut.
+Download **Cronista-Setup-1.0.0.exe** (or the portable zip) from the [Releases page](https://github.com/ignaciochiappero/cronista/releases/latest) and run it. It installs for your user only, without administrator rights, and adds a Start menu shortcut.
 
-Starting in **v0.9.0**, Cronista is a **native Rust application** (`egui`/`eframe`, single ~12 MB executable, ~150 MB idle RAM, zero Chromium/WebView2). On first launch, a 1-click setup downloads the speech model (Parakeet TDT 0.6B v3 int8) and ONNX Runtime to `%LOCALAPPDATA%\Cronista`; FFmpeg is discovered automatically on `PATH` (`winget install ffmpeg`).
+Starting in **v1.0.0**, Cronista is a **native Rust application** (`egui`/`eframe`, single ~12 MB executable, ~150 MB idle RAM, zero Chromium/WebView2). On first launch, a 1-click setup downloads the speech model (Parakeet TDT 0.6B v3 int8) and ONNX Runtime to `%LOCALAPPDATA%\Cronista`; FFmpeg is discovered automatically on `PATH` (`winget install ffmpeg`).
 
 The installer is not code-signed yet, so Windows SmartScreen warns about it: choose **More info**, then **Run anyway**. [SECURITY.md](SECURITY.md) says what the app records, where it keeps it, and how to check your download.
 
@@ -98,7 +98,7 @@ The screen and the audio are separate FFmpeg processes because in one, a still s
 
 ## Development
 
-### Native Rust (v0.9.0+)
+### Native Rust (v1.0.0+)
 
 ```powershell
 cargo test

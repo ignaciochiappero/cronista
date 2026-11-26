@@ -1,6 +1,6 @@
 [package]
 name = "cronista"
-version = "0.9.0"
+version = "1.0.0"
 edition = "2021"
 license = "Apache-2.0"
 description = "Lightweight screen & audio recorder with local, live speech-to-text (Spanish and English)"

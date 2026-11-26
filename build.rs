@@ -29,8 +29,8 @@ fn main() {
         r#"1 ICON "{ico_escaped}"
 
 1 VERSIONINFO
-FILEVERSION 0,9,0,0
-PRODUCTVERSION 0,9,0,0
+FILEVERSION 1,0,0,0
+PRODUCTVERSION 1,0,0,0
 FILEFLAGSMASK 0x3fL
 FILEFLAGS 0x0L
 FILEOS 0x40004L
@@ -43,12 +43,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Ignacio Chiappero\0"
             VALUE "FileDescription", "Cronista - Screen & Audio Recorder with Local Live Transcription\0"
-            VALUE "FileVersion", "0.9.0.0\0"
+            VALUE "FileVersion", "1.0.0.0\0"
             VALUE "InternalName", "Cronista\0"
             VALUE "LegalCopyright", "Copyright 2026 Ignacio Chiappero (Apache-2.0)\0"
             VALUE "OriginalFilename", "Cronista.exe\0"
             VALUE "ProductName", "Cronista\0"
-            VALUE "ProductVersion", "0.9.0\0"
+            VALUE "ProductVersion", "1.0.0\0"
         END
     END
     BLOCK "VarFileInfo"
