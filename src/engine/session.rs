@@ -21,7 +21,7 @@ use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -169,6 +169,7 @@ pub struct RecordingSession {
     samples: Arc<Mutex<usize>>,
     started_at: Arc<Mutex<Option<chrono::DateTime<Local>>>>,
     stopping: Arc<AtomicBool>,
+    audio_level: Arc<AtomicU32>,
     log_state: Option<Arc<Mutex<SharedLogState>>>,
 }
 
@@ -201,8 +202,13 @@ impl RecordingSession {
             samples: Arc::new(Mutex::new(0)),
             started_at: Arc::new(Mutex::new(None)),
             stopping: Arc::new(AtomicBool::new(false)),
+            audio_level: Arc::new(AtomicU32::new(0.0_f32.to_bits())),
             log_state: None,
         }
+    }
+
+    pub fn set_audio_level_sink(&mut self, sink: Arc<AtomicU32>) {
+        self.audio_level = sink;
     }
 
     pub fn set_on_release_model(&mut self, cb: Box<dyn FnOnce() + Send>) {
@@ -390,6 +396,7 @@ impl RecordingSession {
         let on_event_audio = Arc::clone(&self.on_event);
         let scheduler_audio = Arc::clone(&self.scheduler);
         let live_stt = self.settings.live_transcription;
+        let level_sink = Arc::clone(&self.audio_level);
 
         let read_thread = thread::spawn(move || {
             let Some(mut stdout) = speech_stdout else {
@@ -435,10 +442,19 @@ impl RecordingSession {
                         }
                         leftover.drain(..usable_len);
 
+                        let mut max_rms = 0.0_f32;
                         for ch in 0..channels {
+                            let mut sum_sq = 0.0_f32;
                             let mut raw_bytes = Vec::with_capacity(per_ch[ch].len() * 4);
                             for &s in &per_ch[ch] {
+                                sum_sq += s * s;
                                 raw_bytes.extend_from_slice(&s.to_le_bytes());
+                            }
+                            if !per_ch[ch].is_empty() {
+                                let rms = (sum_sq / per_ch[ch].len() as f32).sqrt();
+                                if rms > max_rms {
+                                    max_rms = rms;
+                                }
                             }
                             let _ = tapes[ch].write_all(&raw_bytes);
                             if live_stt {
@@ -447,6 +463,9 @@ impl RecordingSession {
                                 }
                             }
                         }
+                        // Perceptual voice level curve (0.0..=1.0) for live organic LED matrix
+                        let level = (max_rms * 7.5).sqrt().clamp(0.0, 1.0);
+                        level_sink.store(level.to_bits(), Ordering::Relaxed);
                     }
                 }
             }
@@ -458,6 +477,7 @@ impl RecordingSession {
                 }
             }
             drop(tapes);
+            level_sink.store(0.0_f32.to_bits(), Ordering::Relaxed);
             scheduler_audio.close();
         });
         self.threads.push(read_thread);

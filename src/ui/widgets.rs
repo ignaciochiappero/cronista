@@ -5,12 +5,48 @@
 use crate::ui::icons::{paint_icon, Icon};
 use crate::ui::theme::ThemePalette;
 use egui::{
-    pos2, vec2, Align2, Color32, CornerRadius, FontId, Painter, Pos2, Rect, Response, Sense,
-    Stroke, Ui, Vec2,
+    pos2, vec2, Align2, Color32, CornerRadius, CursorIcon, FontId, Painter, Pos2, Rect, Response,
+    Sense, Stroke, Ui, Vec2,
 };
 use std::f32::consts::TAU;
 
-/// Paints a subtle architectural dot-grid and soft radial studio aura behind the main workspace.
+/// Paints a silky GPU-interpolated radial gradient (`egui::Mesh` triangle fan) with zero hard edges.
+fn paint_radial_glow(painter: &Painter, center: Pos2, radius: f32, color: Color32, center_alpha: u8) {
+    let steps = 48usize;
+    let mut mesh = egui::Mesh::default();
+    let c_col = Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), center_alpha);
+    let edge_col = Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), 0);
+
+    // Center vertex (index 0)
+    mesh.colored_vertex(center, c_col);
+    // Mid-falloff ring at 45% radius for photographic Gaussian-like falloff (indices 1..=steps)
+    let mid_col = Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), center_alpha / 3);
+    for i in 0..steps {
+        let ang = (i as f32 / steps as f32) * TAU;
+        let p_mid = pos2(center.x + ang.cos() * radius * 0.45, center.y + ang.sin() * radius * 0.45);
+        mesh.colored_vertex(p_mid, mid_col);
+    }
+    // Outer ring at 100% radius fading smoothly to 0 alpha (indices steps+1..=2*steps)
+    for i in 0..steps {
+        let ang = (i as f32 / steps as f32) * TAU;
+        let p_out = pos2(center.x + ang.cos() * radius, center.y + ang.sin() * radius);
+        mesh.colored_vertex(p_out, edge_col);
+    }
+
+    for i in 0..steps {
+        let next = (i + 1) % steps;
+        let m0 = (1 + i) as u32;
+        let m1 = (1 + next) as u32;
+        let o0 = (1 + steps + i) as u32;
+        let o1 = (1 + steps + next) as u32;
+        mesh.add_triangle(0, m0, m1);
+        mesh.add_triangle(m0, o0, o1);
+        mesh.add_triangle(m0, o1, m1);
+    }
+    painter.add(egui::Shape::mesh(mesh));
+}
+
+/// Paints a subtle architectural dot-grid and silky radial studio aura behind the main workspace.
 pub fn paint_studio_backdrop(
     painter: &Painter,
     rect: Rect,
@@ -18,50 +54,36 @@ pub fn paint_studio_backdrop(
     recording: bool,
     time: f64,
 ) {
-    // 1. Subtle ambient radial studio glow behind the top deck
-    let center = pos2(rect.center().x, rect.top() + 145.0);
+    // 1. Silky GPU mesh radial studio aura (zero hard circles!)
+    let center = pos2(rect.center().x - 40.0, rect.top() + 140.0);
     let glow_color = if recording { p.rec } else { p.accent };
     let pulse = if recording {
-        1.0 + 0.14 * ((time * 2.6).sin() as f32)
+        1.0 + 0.12 * ((time * 2.6).sin() as f32)
     } else {
         1.0
     };
-    let base_alpha = if p.is_dark {
-        if recording { 16.0 } else { 11.0 }
+    let primary_alpha = if p.is_dark {
+        if recording { 38 } else { 24 }
     } else if recording {
-        12.0
+        26
     } else {
-        7.0
+        15
     };
+    paint_radial_glow(painter, center, 440.0 * pulse, glow_color, primary_alpha);
 
-    // Multi-ring soft radial bloom (fast, zero textures, smooth visual falloff)
-    for (i, &(radius, weight)) in [
-        (340.0_f32, 0.22_f32),
-        (250.0, 0.34),
-        (175.0, 0.48),
-        (110.0, 0.62),
-    ]
-    .iter()
-    .enumerate()
-    {
-        let a = ((base_alpha * weight * pulse) as u8).max(1);
-        let col = Color32::from_rgba_unmultiplied(glow_color.r(), glow_color.g(), glow_color.b(), a);
-        let shift_x = if i % 2 == 0 { -18.0 } else { 14.0 };
-        painter.circle_filled(pos2(center.x + shift_x, center.y), radius * pulse, col);
-    }
-
-    // Secondary cool counter-glow on the far right for subtle depth
-    let cool = p.computer;
-    let cool_a = if p.is_dark { 6 } else { 4 };
-    painter.circle_filled(
-        pos2(rect.right() - 120.0, rect.top() + 260.0),
-        220.0,
-        Color32::from_rgba_unmultiplied(cool.r(), cool.g(), cool.b(), cool_a),
+    // Subtle cool counter-aura on the right
+    let cool_alpha = if p.is_dark { 18 } else { 10 };
+    paint_radial_glow(
+        painter,
+        pos2(rect.right() - 120.0, rect.top() + 310.0),
+        380.0,
+        p.computer,
+        cool_alpha,
     );
 
     // 2. Crisp architectural dot grid (24px pitch, ultra-low opacity)
     let step = 24.0_f32;
-    let dot_alpha = if p.is_dark { 14 } else { 18 };
+    let dot_alpha = if p.is_dark { 15 } else { 18 };
     let dot_col = Color32::from_rgba_unmultiplied(p.text3.r(), p.text3.g(), p.text3.b(), dot_alpha);
     let start_x = ((rect.left() / step).floor() * step) + step * 0.5;
     let start_y = ((rect.top() / step).floor() * step) + step * 0.5;
@@ -70,7 +92,7 @@ pub fn paint_studio_backdrop(
         let mut x = start_x;
         while x < rect.right() {
             painter.rect_filled(
-                Rect::from_center_size(pos2(x, y), Vec2::splat(1.4)),
+                Rect::from_center_size(pos2(x, y), Vec2::splat(1.3)),
                 CornerRadius::ZERO,
                 dot_col,
             );
@@ -154,7 +176,7 @@ pub fn ghost_button(
         font,
         fg,
     );
-    resp
+    resp.on_hover_cursor(CursorIcon::PointingHand)
 }
 
 /// Modern minimalist frameless window control button (Minimize / Maximize / Close).
@@ -186,7 +208,7 @@ pub fn window_control_button(
     }
     let ic_rect = Rect::from_center_size(rect.center(), Vec2::splat(16.0));
     paint_icon(painter, ic_rect, icon, fg);
-    resp
+    resp.on_hover_cursor(CursorIcon::PointingHand)
 }
 
 /// Tactile action button with crisp icon, specular rim, and optional primary accent style.
@@ -274,7 +296,11 @@ pub fn action_button_styled(
         font,
         fg,
     );
-    resp
+    if enabled {
+        resp.on_hover_cursor(CursorIcon::PointingHand)
+    } else {
+        resp
+    }
 }
 
 /// Sleek studio pill toggle switch with subtle illuminated border when active.
@@ -374,7 +400,11 @@ pub fn toggle_pill(
         font,
         label_color,
     );
-    resp
+    if enabled {
+        resp.on_hover_cursor(CursorIcon::PointingHand)
+    } else {
+        resp
+    }
 }
 
 /// Soft tinted speaker chip (`● Yo ✎` / `● Otros ✎`).
@@ -424,15 +454,34 @@ pub fn speaker_pill(
         );
         paint_icon(painter, p_rect, Icon::Pencil, fg.gamma_multiply(0.78));
     }
-    resp
+    if enabled {
+        resp.on_hover_cursor(CursorIcon::PointingHand)
+    } else {
+        resp
+    }
 }
 
-/// Precision machined hardware studio Record / Stop trigger with dial ticks, radial glow,
-/// breathing halo while active, and subtle specular highlight on the core.
+fn mix_rgb(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
+    let t = t.clamp(0.0, 1.0);
+    [
+        a[0] + (b[0] - a[0]) * t,
+        a[1] + (b[1] - a[1]) * t,
+        a[2] + (b[2] - a[2]) * t,
+    ]
+}
+
+fn c32_to_f32(c: Color32) -> [f32; 3] {
+    [c.r() as f32 / 255.0, c.g() as f32 / 255.0, c.b() as f32 / 255.0]
+}
+
+/// Arc UI (`@uiarc/voice-orb`) & ElevenLabs-inspired 3D Fresnel liquid Aura Voice Orb trigger.
+/// Rendered with a high-resolution polar `egui::Mesh` so internal plasma gradients, Fresnel rim
+/// lighting, and atmospheric glow blend seamlessly on GPU with zero hard concentric steps.
 pub fn record_button(
     ui: &mut Ui,
     active: bool,
     enabled: bool,
+    audio_level: f32,
     time: f64,
     p: &ThemePalette,
 ) -> Response {
@@ -441,177 +490,462 @@ pub fn record_button(
         if enabled { Sense::click() } else { Sense::hover() },
     );
     let hovered = enabled && resp.hovered();
+    let hover_mix = ui.ctx().animate_bool_with_time(
+        egui::Id::new("voice_orb_hover"),
+        hovered,
+        0.45,
+    );
+    let active_mix = ui.ctx().animate_bool_with_time(
+        egui::Id::new("voice_orb_active"),
+        active,
+        0.38,
+    );
+
     let painter = ui.painter();
     let c = rect.center();
+    let t = time as f32;
+    let lvl = if active { audio_level.clamp(0.0, 1.0) } else { 0.0 };
 
-    let pulse = if active {
-        0.5 + 0.5 * ((time * 3.2).sin() as f32)
+    // 1. Wide, dreamy red atmospheric mist aura behind the orb
+    let aura_col = p.rec;
+    let aura_alpha = if !enabled {
+        10
+    } else {
+        (26.0 + hover_mix * 36.0 + active_mix * (32.0 + lvl * 46.0)).min(115.0) as u8
+    };
+    let aura_radius = 48.0 + hover_mix * 7.0 + active_mix * (5.0 + lvl * 12.0);
+    paint_radial_glow(painter, c, aura_radius, aura_col, aura_alpha);
+
+    // 2. High-resolution polar 3D misty red aurora orb (translucent & softly feathered edges)
+    let rings = 16usize;
+    let sectors = 56usize;
+    let base_r = 37.5 + hover_mix * 1.8 + active_mix * (1.5 + lvl * 3.8);
+
+    // Deep smoky crimson -> vivid red nebula -> luminous scarlet ember
+    let mist_void = [0.09, 0.012, 0.016];
+    let red_mid = c32_to_f32(p.rec);
+    let red_deep = [
+        (red_mid[0] * 0.72).clamp(0.0, 1.0),
+        (red_mid[1] * 0.16).clamp(0.0, 1.0),
+        (red_mid[2] * 0.18).clamp(0.0, 1.0),
+    ];
+    let red_ember = [
+        1.0,
+        (red_mid[1] * 1.18 + 0.16).min(1.0),
+        (red_mid[2] * 0.92 + 0.10).min(1.0),
+    ];
+    let rim_red = [
+        1.0,
+        (red_mid[1] * 0.62 + 0.22).min(1.0),
+        (red_mid[2] * 0.55 + 0.18).min(1.0),
+    ];
+
+    // Constant, slow, meditative mist drift (zero phase jump on hover!)
+    let flow = t * 0.22;
+    let ca = (flow * 0.35).cos();
+    let sa = (flow * 0.35).sin();
+
+    let glow_boost = (0.42 + hover_mix * 0.48 + active_mix * (0.40 + lvl * 0.30)).clamp(0.0, 1.2);
+
+    let shade_vertex = |nx: f32, ny: f32, r_norm: f32| -> Color32 {
+        let sz = (1.0 - (r_norm * r_norm).min(1.0)).sqrt();
+        let rx = nx * ca - ny * sa;
+        let ry = nx * sa + ny * ca;
+
+        // Domain-warped 2-octave red smoke/nebula plumes (organic wispy clouds!)
+        let w1 = organic_noise(rx * 1.75 + flow * 0.52, ry * 1.75 - flow * 0.41, sz * 1.5 + flow * 0.32);
+        let w2 = organic_noise(
+            rx * 2.85 + (w1 - 0.5) * 1.65 - flow * 0.38,
+            ry * 2.85 - (w1 - 0.5) * 1.65 + flow * 0.34,
+            sz * 2.1 - flow * 0.26,
+        );
+        let plume = (0.42 * w1 + 0.58 * w2).clamp(0.0, 1.0);
+        // Sculpted smoky clouds with deep dark-red hollows & bright red wisps
+        let cloud = smoothstep((plume - 0.18) / 0.68);
+        let wisp = smoothstep((plume - 0.54) / 0.38);
+
+        // Soft misty radial fade so the red nebula stays airy & translucent
+        let soft_edge = (1.0 - smoothstep((r_norm - 0.50) / 0.50)).clamp(0.0, 1.0);
+        let edge_noise = (0.60 + 0.55 * w2).clamp(0.0, 1.15);
+        let base_translucency = 0.62 + 0.16 * hover_mix + 0.18 * active_mix;
+        let mist_alpha =
+            (soft_edge * (0.26 + 0.74 * cloud) * edge_noise * base_translucency).clamp(0.0, 0.80);
+
+        // Soft glowing crimson Fresnel veil right inside the misty perimeter
+        let veil_ring = (-(r_norm - 0.76).powi(2) / (2.0 * 0.13 * 0.13)).exp()
+            * (0.16 + 0.34 * hover_mix + 0.28 * active_mix)
+            * (0.55 + 0.45 * w1);
+
+        let mut rgb = mix_rgb(mist_void, red_deep, 0.35 + 0.65 * cloud);
+        rgb = mix_rgb(rgb, red_mid, (cloud * glow_boost).clamp(0.0, 1.0));
+        // Luminous warm ember filaments glowing from inside when hovered or recording
+        let inner_lum = (wisp * sz.powf(0.55) * (0.22 + hover_mix * 0.62 + active_mix * (0.58 + lvl * 0.40)))
+            .clamp(0.0, 1.0);
+        rgb = mix_rgb(rgb, red_ember, inner_lum * 0.88);
+        rgb = mix_rgb(rgb, rim_red, (veil_ring * 0.72).clamp(0.0, 0.82));
+
+        let final_alpha = (mist_alpha + veil_ring * 0.42).clamp(0.0, 0.84)
+            * if enabled { 1.0 } else { 0.40 };
+
+        Color32::from_rgba_unmultiplied(
+            (rgb[0] * 255.0).clamp(0.0, 255.0) as u8,
+            (rgb[1] * 255.0).clamp(0.0, 255.0) as u8,
+            (rgb[2] * 255.0).clamp(0.0, 255.0) as u8,
+            (final_alpha * 255.0).clamp(0.0, 255.0) as u8,
+        )
+    };
+
+    let mut mesh = egui::Mesh::default();
+    mesh.colored_vertex(c, shade_vertex(0.0, 0.0, 0.0));
+
+    for ri in 1..=rings {
+        let r_norm = ri as f32 / rings as f32;
+        for si in 0..sectors {
+            let ang = (si as f32 / sectors as f32) * TAU;
+            let ca_s = ang.cos();
+            let sa_s = ang.sin();
+
+            // Gentle organic misty edge undulation (stronger with live voice)
+            let wn = organic_noise(ca_s * 1.4 + flow * 0.9, sa_s * 1.4 - flow * 0.8, flow * 0.6) - 0.5;
+            let wobble = wn * (1.8 + hover_mix * 1.2 + active_mix * (1.8 + lvl * 4.5)) * r_norm;
+
+            let px_r = r_norm * (base_r + wobble);
+            let pos = pos2(c.x + ca_s * px_r, c.y + sa_s * px_r);
+            let col = if ri == rings {
+                Color32::from_rgba_unmultiplied(p.rec.r(), p.rec.g(), p.rec.b(), 0)
+            } else {
+                shade_vertex(ca_s * r_norm, sa_s * r_norm, r_norm)
+            };
+            mesh.colored_vertex(pos, col);
+        }
+    }
+
+    for si in 0..sectors {
+        let next = (si + 1) % sectors;
+        mesh.add_triangle(0, (1 + si) as u32, (1 + next) as u32);
+    }
+    for ri in 1..rings {
+        let row0 = 1 + (ri - 1) * sectors;
+        let row1 = 1 + ri * sectors;
+        for si in 0..sectors {
+            let next = (si + 1) % sectors;
+            let a = (row0 + si) as u32;
+            let b = (row0 + next) as u32;
+            let d = (row1 + si) as u32;
+            let e = (row1 + next) as u32;
+            mesh.add_triangle(a, d, e);
+            mesh.add_triangle(a, e, b);
+        }
+    }
+    painter.add(egui::Shape::mesh(mesh));
+
+    // 3. Subtle circular glass button border so it reads unmistakably as a tactile button
+    let border_r = base_r - 1.5;
+    let border_a = if !enabled {
+        24
+    } else {
+        (46.0 + hover_mix * 68.0 + active_mix * 64.0).min(155.0) as u8
+    };
+    let border_col = Color32::from_rgba_unmultiplied(
+        (p.rec.r() as f32 * 0.82 + 45.0).min(255.0) as u8,
+        (p.rec.g() as f32 * 0.78 + 38.0).min(255.0) as u8,
+        (p.rec.b() as f32 * 0.78 + 38.0).min(255.0) as u8,
+        border_a,
+    );
+    painter.circle_stroke(c, border_r, Stroke::new(1.0_f32, border_col));
+
+    // 4. Minimalist frosted stop glyph ONLY while actively recording
+    if active_mix > 0.05 {
+        let sq_sz = 14.0 + 2.0 * active_mix;
+        let sq = Rect::from_center_size(c, Vec2::splat(sq_sz));
+        let a = (active_mix * 235.0) as u8;
+        painter.rect_filled(
+            sq,
+            CornerRadius::same(4),
+            Color32::from_rgba_unmultiplied(255, 255, 255, a),
+        );
+    }
+
+    if enabled {
+        resp.on_hover_cursor(CursorIcon::PointingHand)
+    } else {
+        resp
+    }
+}
+
+/// Fast deterministic 3D value noise (`0.0..=1.0`) for organic, non-repetitive LED patterns.
+fn hash3(ix: i32, iy: i32, iz: i32) -> f32 {
+    let mut n = ix
+        .wrapping_mul(374_761_393)
+        .wrapping_add(iy.wrapping_mul(668_265_263))
+        .wrapping_add(iz.wrapping_mul(2_147_483_647));
+    n = (n ^ (n >> 13)).wrapping_mul(1_274_126_177);
+    let u = (n ^ (n >> 16)) as u32;
+    (u & 0x00ff_ffff) as f32 / 16_777_215.0
+}
+
+fn smoothstep(t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+fn organic_noise(x: f32, y: f32, z: f32) -> f32 {
+    let ix = x.floor() as i32;
+    let iy = y.floor() as i32;
+    let iz = z.floor() as i32;
+    let fx = smoothstep(x - ix as f32);
+    let fy = smoothstep(y - iy as f32);
+    let fz = smoothstep(z - iz as f32);
+
+    let lerp = |a: f32, b: f32, t: f32| a + (b - a) * t;
+    let c000 = hash3(ix, iy, iz);
+    let c100 = hash3(ix + 1, iy, iz);
+    let c010 = hash3(ix, iy + 1, iz);
+    let c110 = hash3(ix + 1, iy + 1, iz);
+    let c001 = hash3(ix, iy, iz + 1);
+    let c101 = hash3(ix + 1, iy, iz + 1);
+    let c011 = hash3(ix, iy + 1, iz + 1);
+    let c111 = hash3(ix + 1, iy + 1, iz + 1);
+
+    let x00 = lerp(c000, c100, fx);
+    let x10 = lerp(c010, c110, fx);
+    let x01 = lerp(c001, c101, fx);
+    let x11 = lerp(c011, c111, fx);
+    lerp(lerp(x00, x10, fy), lerp(x01, x11, fy), fz)
+}
+
+/// Organic double-beat cardiac/acoustic ring (`lub-dub`) travelling outward from center (`dist = 0 -> 1`).
+fn heartbeat_ring(dist: f32, time: f32, period: f32, ring_width: f32) -> f32 {
+    let phase = (time % period) / period; // 0..1
+    // Primary beat ("lub"): expands from 0.0 -> 1.15 over first 52% of cycle
+    let r1 = phase * 2.15;
+    let env1 = (1.0 - phase * 1.45).clamp(0.0, 1.0);
+    let b1 = (-(dist - r1).powi(2) / (2.0 * ring_width * ring_width)).exp() * env1;
+
+    // Secondary softer echo beat ("dub"): starts slightly later at phase 0.16
+    let p2 = (phase - 0.16).max(0.0);
+    let r2 = p2 * 1.95;
+    let env2 = if phase > 0.16 {
+        (1.0 - p2 * 1.65).clamp(0.0, 1.0) * 0.65
     } else {
         0.0
     };
+    let b2 = (-(dist - r2).powi(2) / (2.0 * (ring_width * 1.15).powi(2))).exp() * env2;
 
-    // Animated expanding pulse halo when recording
-    if active {
-        let ring_r = 41.0 + pulse * 6.0;
-        let ring_a = ((1.0 - pulse) * 90.0) as u8;
-        painter.circle_stroke(
-            c,
-            ring_r,
-            Stroke::new(
-                1.5_f32,
-                Color32::from_rgba_unmultiplied(p.rec.r(), p.rec.g(), p.rec.b(), ring_a),
-            ),
-        );
-    }
-
-    // Outer precision studio bezel with 12 delicate dial ticks
-    let outer_r = 44.0_f32;
-    let bezel_stroke = if active {
-        Stroke::new(1.0_f32, p.rec.gamma_multiply(0.5))
-    } else if hovered {
-        Stroke::new(1.0_f32, p.border_strong)
-    } else {
-        Stroke::new(1.0_f32, p.border)
-    };
-    painter.circle_stroke(c, outer_r, bezel_stroke);
-
-    let tick_col = if active {
-        p.rec.gamma_multiply(0.55)
-    } else {
-        p.border_strong
-    };
-    for i in 0..12 {
-        let ang = (i as f32 / 12.0) * TAU;
-        let r0 = outer_r - 4.0;
-        let r1 = outer_r - 1.2;
-        painter.line_segment(
-            [
-                pos2(c.x + ang.cos() * r0, c.y + ang.sin() * r0),
-                pos2(c.x + ang.cos() * r1, c.y + ang.sin() * r1),
-            ],
-            Stroke::new(1.0_f32, tick_col),
-        );
-    }
-
-    // Recessed anodized well
-    let well_r = 35.5_f32;
-    let well_fill = if active {
-        p.rec_soft
-    } else if hovered {
-        p.surface3
-    } else {
-        p.surface2
-    };
-    let well_stroke = if active {
-        Stroke::new(1.2_f32, p.rec.gamma_multiply(0.75))
-    } else if hovered {
-        Stroke::new(1.2_f32, p.accent.gamma_multiply(0.55))
-    } else {
-        Stroke::new(1.0_f32, p.border_strong)
-    };
-    painter.circle(c, well_r, well_fill, well_stroke);
-
-    // Multi-step radial coral glow inside well
-    let dot_color = if enabled {
-        p.rec
-    } else {
-        p.rec.gamma_multiply(0.45)
-    };
-    if enabled {
-        let g1 = if active { 34 + (pulse * 22.0) as u8 } else if hovered { 34 } else { 18 };
-        let g2 = if active { 56 + (pulse * 26.0) as u8 } else if hovered { 54 } else { 30 };
-        painter.circle_filled(
-            c,
-            29.0,
-            Color32::from_rgba_unmultiplied(p.rec.r(), p.rec.g(), p.rec.b(), g1),
-        );
-        painter.circle_filled(
-            c,
-            21.5,
-            Color32::from_rgba_unmultiplied(p.rec.r(), p.rec.g(), p.rec.b(), g2),
-        );
-    }
-
-    if active {
-        let sq = Rect::from_center_size(c, Vec2::splat(22.0));
-        painter.rect_filled(sq, CornerRadius::same(6), dot_color);
-        // Subtle top specular highlight on stop square
-        painter.line_segment(
-            [pos2(sq.left() + 5.0, sq.top() + 2.0), pos2(sq.right() - 5.0, sq.top() + 2.0)],
-            Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(255, 255, 255, 75)),
-        );
-    } else {
-        let core_r = if hovered { 15.2 } else { 14.0 };
-        painter.circle_filled(c, core_r, dot_color);
-        // Subtle tactile specular sheen on top-left of the button cap
-        painter.circle_filled(
-            pos2(c.x - 4.0, c.y - 4.5),
-            4.2,
-            Color32::from_rgba_unmultiplied(255, 255, 255, 52),
-        );
-    }
-
-    resp
+    (b1 + b2).clamp(0.0, 1.0)
 }
 
-/// Decorative & live-reactive acoustic studio waveform visualizer ribbon.
-pub fn studio_waveform(ui: &mut Ui, active: bool, busy_import: bool, time: f64, p: &ThemePalette) {
-    let bars = 26usize;
-    let bar_w = 3.2_f32;
-    let gap = 4.2_f32;
-    let total_w = bars as f32 * bar_w + (bars - 1) as f32 * gap;
-    let total_h = 54.0_f32;
+/// Arc UI (`@uiarc/dot-matrix-loader`) inspired animated 5x5 LED dot-matrix loader.
+/// Emits soft center-outward heartbeat ripples with organic noise; unlit dots dissolve at edges.
+pub fn dot_matrix_loader(
+    ui: &mut Ui,
+    cols: usize,
+    rows: usize,
+    size: f32,
+    time: f64,
+    color: Color32,
+    p: &ThemePalette,
+) {
+    let (rect, _) = ui.allocate_exact_size(Vec2::splat(size), Sense::hover());
+    let painter = ui.painter();
+    let pad = size * 0.14;
+    let inner = rect.shrink(pad);
+    let step_x = if cols > 1 { inner.width() / (cols - 1) as f32 } else { 0.0 };
+    let step_y = if rows > 1 { inner.height() / (rows - 1) as f32 } else { 0.0 };
+    let dot_r = (step_x.min(step_y) * 0.27).clamp(1.2, 2.3);
+    let t = time as f32;
+    let half_c = (cols as f32 - 1.0).max(1.0) * 0.5;
+    let half_r = (rows as f32 - 1.0).max(1.0) * 0.5;
+
+    for r in 0..rows {
+        for c in 0..cols {
+            let cx = inner.left() + c as f32 * step_x;
+            let cy = inner.top() + r as f32 * step_y;
+
+            let nx = (c as f32 - half_c) / half_c;
+            let ny = (r as f32 - half_r) / half_r;
+            let r_norm = (nx * nx + ny * ny).sqrt();
+            let edge_fade = (1.0 - (r_norm * 0.82).powi(2)).clamp(0.0, 1.0).powf(1.5);
+
+            // Organic center-outward heartbeat + subtle random shimmer
+            let n = organic_noise(c as f32 * 0.65, r as f32 * 0.65, t * 1.4);
+            let pulse = heartbeat_ring((r_norm * 0.85 + (n - 0.5) * 0.14).max(0.0), t, 1.9, 0.26);
+            let intensity = (pulse * (0.65 + 0.45 * n) * edge_fade).clamp(0.0, 1.0);
+
+            let unlit_alpha = ((if p.is_dark { 7.0 } else { 10.0 }) * edge_fade).round() as u8;
+            if unlit_alpha >= 2 {
+                let base_dot = Color32::from_rgba_unmultiplied(
+                    p.text3.r(),
+                    p.text3.g(),
+                    p.text3.b(),
+                    unlit_alpha,
+                );
+                painter.circle_filled(pos2(cx, cy), dot_r * 0.72, base_dot);
+            }
+
+            if intensity > 0.06 {
+                let a = (intensity * 235.0) as u8;
+                if a >= 4 {
+                    let lit = Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), a);
+                    if intensity > 0.55 {
+                        let halo_a = ((intensity - 0.5) * 85.0 * edge_fade) as u8;
+                        if halo_a >= 2 {
+                            painter.circle_filled(
+                                pos2(cx, cy),
+                                dot_r * 1.85,
+                                Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), halo_a),
+                            );
+                        }
+                    }
+                    painter.circle_filled(pos2(cx, cy), dot_r * (0.68 + 0.38 * intensity), lit);
+                }
+            }
+        }
+    }
+}
+
+/// Organic center-outward LED Dot-Matrix studio indicator (`19x5`):
+/// - Idle (unhovered): whisper-faint core with a rare, soft heartbeat every ~4.6s; edges vanish into bg.
+/// - Hover: wakes smoothly with organic center-outward ripples and soft ember noise.
+/// - Recording: reacts directly to real-time microphone/PC audio RMS (`audio_level`), radiating
+///   living acoustic heartbeat pulses outward from the center as you speak.
+/// - Transcribing: calm center-outward double-beat radial pulse loader.
+pub fn studio_waveform(
+    ui: &mut Ui,
+    active: bool,
+    busy_import: bool,
+    hover_mix: f32,
+    audio_level: f32,
+    time: f64,
+    p: &ThemePalette,
+) {
+    let cols = 19usize;
+    let rows = 5usize;
+    let pitch_x = 10.0_f32;
+    let pitch_y = 9.5_f32;
+    let total_w = (cols - 1) as f32 * pitch_x + 12.0;
+    let total_h = (rows - 1) as f32 * pitch_y + 12.0;
     let (rect, _) = ui.allocate_exact_size(vec2(total_w, total_h), Sense::hover());
     let painter = ui.painter();
-    let cy = rect.center().y;
     let t = time as f32;
+    let center_col = (cols as f32 - 1.0) * 0.5;
+    let center_row = (rows as f32 - 1.0) * 0.5;
+    let dot_r = 2.05_f32;
 
-    // Subtle center horizon line
-    painter.line_segment(
-        [pos2(rect.left(), cy), pos2(rect.right(), cy)],
-        Stroke::new(1.0_f32, p.border),
-    );
+    for c in 0..cols {
+        let nx = (c as f32 - center_col) / center_col.max(1.0); // -1..1
+        let h_fade = (1.0 - nx * nx).clamp(0.0, 1.0).powf(1.55);
 
-    for i in 0..bars {
-        let u = (i as f32) / ((bars - 1) as f32);
-        // Smooth bell envelope so edges taper gracefully
-        let env = (u * std::f32::consts::PI).sin().powf(0.85);
-        let amp = if active {
-            let w1 = (t * 5.2 + i as f32 * 0.55).sin().abs();
-            let w2 = (t * 8.7 - i as f32 * 0.92).cos().abs();
-            let w3 = (t * 3.1 + i as f32 * 0.28).sin().abs();
-            0.18 + 0.82 * env * (0.45 * w1 + 0.35 * w2 + 0.20 * w3)
-        } else if busy_import {
-            let sweep = (t * 3.4 - u * 4.5).sin() * 0.5 + 0.5;
-            0.14 + 0.56 * env * sweep
-        } else {
-            // Calm sculptural acoustic signature at rest
-            let sculpt = 0.42
-                + 0.36 * (i as f32 * 0.62).sin().abs()
-                + 0.22 * (i as f32 * 1.15 + 0.8).cos().abs();
-            0.12 + 0.42 * env * sculpt
-        };
+        let x = rect.left() + 6.0 + c as f32 * pitch_x;
+        for r in 0..rows {
+            let y = rect.top() + 6.0 + r as f32 * pitch_y;
+            let ny = (r as f32 - center_row) / center_row.max(1.0); // -1..1
+            let v_fade = (1.0 - (ny * 0.92).powi(2)).clamp(0.0, 1.0).powf(1.1);
+            // Elliptical vignette so edges & corners dissolve completely into the card background
+            let edge_fade = (h_fade * v_fade).clamp(0.0, 1.0);
 
-        let h = (amp * (total_h - 6.0)).max(4.0);
-        let x = rect.left() + i as f32 * (bar_w + gap);
-        let bar_rect = Rect::from_center_size(pos2(x + bar_w * 0.5, cy), vec2(bar_w, h));
+            // Normalized elliptical distance from center (0.0 at center -> ~1.0 at perimeter)
+            let radial = (nx * nx * 0.85 + ny * ny * 0.65).sqrt();
 
-        let color = if active {
-            let alpha = (145.0 + 110.0 * env) as u8;
-            Color32::from_rgba_unmultiplied(p.rec.r(), p.rec.g(), p.rec.b(), alpha)
-        } else if busy_import {
-            let alpha = (110.0 + 120.0 * env) as u8;
-            Color32::from_rgba_unmultiplied(p.accent.r(), p.accent.g(), p.accent.b(), alpha)
-        } else {
-            let alpha = (40.0 + 75.0 * env) as u8;
-            if i % 3 == 0 {
-                Color32::from_rgba_unmultiplied(p.accent.r(), p.accent.g(), p.accent.b(), alpha)
+            // Unlit dot socket: nearly invisible even in center, 0% at edges
+            let unlit_base = if active {
+                9.0
             } else {
-                Color32::from_rgba_unmultiplied(p.text3.r(), p.text3.g(), p.text3.b(), alpha)
+                5.5 + 4.5 * hover_mix
+            };
+            let unlit_alpha = (unlit_base * edge_fade).round() as u8;
+            if unlit_alpha >= 2 {
+                let dim_dot = Color32::from_rgba_unmultiplied(
+                    p.text3.r(),
+                    p.text3.g(),
+                    p.text3.b(),
+                    unlit_alpha,
+                );
+                painter.circle_filled(pos2(x, y), dot_r * 0.68, dim_dot);
             }
-        };
 
-        painter.rect_filled(bar_rect, CornerRadius::same(2), color);
+            // Two-octave smooth 3D organic noise (gives natural non-mechanical variation)
+            let n_slow = organic_noise(c as f32 * 0.34, r as f32 * 0.55, t * 0.55);
+            let n_med = organic_noise(c as f32 * 0.62 + 11.3, r as f32 * 0.82 + 4.7, t * 1.45);
+            let jitter = (n_slow - 0.5) * 0.22 + (n_med - 0.5) * 0.10;
+            let org_radial = (radial + jitter).max(0.0);
+
+            let lit_strength = if active {
+                // Live recording: soft core heartbeat + real voice-driven center-outward acoustic bloom!
+                let base_heart = heartbeat_ring(org_radial, t, 1.75, 0.20) * 0.42;
+                let voice_reach = 0.16 + audio_level * 0.98;
+                let voice_bloom = (1.0 - (org_radial / voice_reach).powf(1.8)).clamp(0.0, 1.0)
+                    * (0.28 + 0.72 * audio_level);
+                let voice_ripple = heartbeat_ring(org_radial, t * 1.35, 1.15, 0.22)
+                    * audio_level
+                    * 0.65;
+                let organic_mod = 0.70 + 0.45 * n_med;
+                ((base_heart + voice_bloom + voice_ripple) * organic_mod * edge_fade).clamp(0.0, 1.0)
+            } else if busy_import {
+                // Transcribing: calm center-outward double heartbeat pulse
+                let heart = heartbeat_ring(org_radial, t, 2.0, 0.22);
+                let core = (1.0 - radial * 1.6).clamp(0.0, 1.0) * 0.22;
+                ((heart * (0.68 + 0.45 * n_med) + core) * edge_fade).clamp(0.0, 1.0)
+            } else {
+                // Idle: whisper-faint rare resting heartbeat; smoothly wakes on hover!
+                let rest_heart = heartbeat_ring(org_radial, t, 4.6, 0.18) * 0.26;
+                let rest_core = (1.0 - radial * 2.1).clamp(0.0, 1.0) * (0.10 + 0.08 * n_slow);
+                let rest = (rest_heart + rest_core) * (0.65 + 0.35 * n_slow);
+
+                let hover_heart = heartbeat_ring(org_radial, t, 2.1, 0.22) * 0.78;
+                let hover_embers = ((n_med - 0.46) * 1.4).clamp(0.0, 1.0)
+                    * (1.0 - radial * 0.95).clamp(0.0, 1.0)
+                    * 0.42;
+                let hover_val = hover_heart * (0.72 + 0.40 * n_slow) + hover_embers;
+
+                ((rest * (1.0 - hover_mix) + hover_val * hover_mix) * edge_fade).clamp(0.0, 1.0)
+            };
+
+            if lit_strength > 0.04 {
+                let base_col = if active {
+                    p.rec
+                } else if busy_import || radial < 0.42 {
+                    p.accent
+                } else {
+                    p.accent_text
+                };
+                let max_a = if active {
+                    242.0
+                } else if busy_import {
+                    220.0
+                } else {
+                    135.0 + 75.0 * hover_mix
+                };
+                let a = (lit_strength * max_a) as u8;
+                if a >= 3 {
+                    let col =
+                        Color32::from_rgba_unmultiplied(base_col.r(), base_col.g(), base_col.b(), a);
+
+                    if lit_strength > 0.52 {
+                        let halo_a = ((lit_strength - 0.48)
+                            * if active { 92.0 } else { 54.0 }
+                            * edge_fade) as u8;
+                        if halo_a >= 2 {
+                            painter.circle_filled(
+                                pos2(x, y),
+                                dot_r * 2.0,
+                                Color32::from_rgba_unmultiplied(
+                                    base_col.r(),
+                                    base_col.g(),
+                                    base_col.b(),
+                                    halo_a,
+                                ),
+                            );
+                        }
+                    }
+                    painter.circle_filled(
+                        pos2(x, y),
+                        dot_r * (0.65 + 0.40 * lit_strength),
+                        col,
+                    );
+                }
+            }
+        }
     }
 }
 
@@ -667,27 +1001,88 @@ pub fn dashed_import_tile(
         FontId::proportional(11.0),
         p.text3,
     );
-    resp
+    if enabled {
+        resp.on_hover_cursor(CursorIcon::PointingHand)
+    } else {
+        resp
+    }
 }
 
+/// Draws a continuous dashed rounded rectangle including smooth rounded corner arcs.
 pub fn paint_dashed_rect(painter: &Painter, rect: Rect, r: f32, stroke: Stroke, dash: f32, gap: f32) {
-    let draw_edge = |a: Pos2, b: Pos2| {
-        let delta = b - a;
-        let len = delta.length();
-        if len <= 0.1 {
-            return;
-        }
-        let dir = delta / len;
-        let mut t = 0.0;
-        while t < len {
-            let end = (t + dash).min(len);
-            painter.line_segment([a + dir * t, a + dir * end], stroke);
-            t += dash + gap;
+    let rect = rect.shrink(stroke.width * 0.5);
+    let r = r.min(rect.width() * 0.5).min(rect.height() * 0.5).max(0.0);
+    let arc_steps = 8usize;
+    let mut pts: Vec<Pos2> = Vec::with_capacity(arc_steps * 4 + 5);
+
+    let mut push_arc = |center: Pos2, start_ang: f32, end_ang: f32| {
+        for i in 0..=arc_steps {
+            let t = i as f32 / arc_steps as f32;
+            let a = start_ang + (end_ang - start_ang) * t;
+            pts.push(pos2(center.x + a.cos() * r, center.y + a.sin() * r));
         }
     };
-    let r = r.min(rect.width() * 0.5).min(rect.height() * 0.5);
-    draw_edge(pos2(rect.left() + r, rect.top()), pos2(rect.right() - r, rect.top()));
-    draw_edge(pos2(rect.right(), rect.top() + r), pos2(rect.right(), rect.bottom() - r));
-    draw_edge(pos2(rect.right() - r, rect.bottom()), pos2(rect.left() + r, rect.bottom()));
-    draw_edge(pos2(rect.left(), rect.bottom() - r), pos2(rect.left(), rect.top() + r));
+
+    let pi = std::f32::consts::PI;
+    // Top-right -> Bottom-right -> Bottom-left -> Top-left (clockwise)
+    push_arc(pos2(rect.right() - r, rect.top() + r), -pi * 0.5, 0.0);
+    push_arc(pos2(rect.right() - r, rect.bottom() - r), 0.0, pi * 0.5);
+    push_arc(pos2(rect.left() + r, rect.bottom() - r), pi * 0.5, pi);
+    push_arc(pos2(rect.left() + r, rect.top() + r), pi, pi * 1.5);
+    if let Some(&first) = pts.first() {
+        pts.push(first);
+    }
+
+    // Walk along the polyline by arc-length and emit clean dashes around corners too!
+    let period = (dash + gap).max(1.0);
+    let mut dist_in_cycle = 0.0_f32;
+    let mut current_dash: Vec<Pos2> = Vec::new();
+
+    for seg in pts.windows(2) {
+        let a = seg[0];
+        let b = seg[1];
+        let delta = b - a;
+        let seg_len = delta.length();
+        if seg_len <= 1e-4 {
+            continue;
+        }
+        let dir = delta / seg_len;
+        let mut cursor = 0.0_f32;
+
+        while cursor < seg_len {
+            let in_dash = dist_in_cycle < dash;
+            let remaining_in_phase = if in_dash {
+                dash - dist_in_cycle
+            } else {
+                period - dist_in_cycle
+            };
+            let step = remaining_in_phase.min(seg_len - cursor);
+            let p0 = a + dir * cursor;
+            let p1 = a + dir * (cursor + step);
+
+            if in_dash {
+                if current_dash.is_empty() {
+                    current_dash.push(p0);
+                }
+                current_dash.push(p1);
+            }
+
+            cursor += step;
+            dist_in_cycle += step;
+
+            if dist_in_cycle >= dash - 1e-4 && in_dash {
+                if current_dash.len() >= 2 {
+                    painter.add(egui::Shape::line(std::mem::take(&mut current_dash), stroke));
+                } else {
+                    current_dash.clear();
+                }
+            }
+            if dist_in_cycle >= period - 1e-4 {
+                dist_in_cycle = 0.0;
+            }
+        }
+    }
+    if current_dash.len() >= 2 {
+        painter.add(egui::Shape::line(current_dash, stroke));
+    }
 }

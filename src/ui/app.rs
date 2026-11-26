@@ -16,9 +16,9 @@ use crate::ui::i18n::{strings, theme_name, tour_steps};
 use crate::ui::icons::{paint_cronista_logo, paint_icon, Icon};
 use crate::ui::theme::{apply_to_egui, palette_for, ThemePalette};
 use crate::ui::widgets::{
-    action_button, action_button_styled, dashed_import_tile, ghost_button, paint_card_specular,
-    paint_dashed_rect, paint_studio_backdrop, record_button, speaker_pill, studio_waveform,
-    toggle_pill, window_control_button,
+    action_button, action_button_styled, dashed_import_tile, dot_matrix_loader, ghost_button,
+    paint_card_specular, paint_dashed_rect, paint_studio_backdrop, record_button, speaker_pill,
+    studio_waveform, toggle_pill, window_control_button,
 };
 use egui::{
     pos2, vec2, Align, Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Frame,
@@ -97,6 +97,8 @@ pub struct CronistaApp {
     ram_mb: f64,
     last_ram_check: Instant,
     allow_close: bool,
+    deck_hovered: bool,
+    smoothed_audio_level: f32,
 }
 
 impl CronistaApp {
@@ -177,6 +179,8 @@ impl CronistaApp {
             ram_mb: current_ram_mb(),
             last_ram_check: Instant::now(),
             allow_close: false,
+            deck_hovered: false,
+            smoothed_audio_level: 0.0,
         })
     }
 
@@ -356,9 +360,12 @@ impl CronistaApp {
             .frame(Frame::new().fill(p.surface).inner_margin(Margin::symmetric(16, 0)))
             .show(ctx, |ui| {
                 let rect = ui.max_rect();
-                // Single subtle bottom hairline
+                // Edge-to-edge subtle bottom hairline (accounts for 16px horizontal margin)
                 ui.painter().line_segment(
-                    [pos2(rect.left(), rect.bottom()), pos2(rect.right(), rect.bottom())],
+                    [
+                        pos2(rect.left() - 16.0, rect.bottom()),
+                        pos2(rect.right() + 16.0, rect.bottom()),
+                    ],
                     Stroke::new(1.0_f32, p.border),
                 );
 
@@ -379,43 +386,61 @@ impl CronistaApp {
                     ui.label(RichText::new("Cronista").font(semibold(15.0)).color(p.text));
                     ui.add_space(8.0);
 
-                    // Status pill
+                    // Exact-centered Status pill (26px height, aligned with logo & right controls)
                     let (dot_color, pill_bg, pill_fg, pill_text) = self.status_pill(p);
-                    Frame::new()
-                        .fill(pill_bg)
-                        .stroke(Stroke::new(1.0_f32, p.border))
-                        .corner_radius(CornerRadius::same(12))
-                        .inner_margin(Margin::symmetric(10, 4))
-                        .show(ui, |ui| {
-                            ui.horizontal(|ui| {
-                                ui.spacing_mut().item_spacing.x = 7.0;
-                                let (r, _) = ui.allocate_exact_size(Vec2::splat(7.0), Sense::hover());
-                                ui.painter().circle_filled(r.center(), 3.4, dot_color);
-                                ui.label(RichText::new(pill_text).size(12.0).color(pill_fg));
-                            });
-                        });
+                    {
+                        let font = FontId::proportional(12.0);
+                        let galley = ui
+                            .painter()
+                            .layout_no_wrap(pill_text.clone(), font.clone(), pill_fg);
+                        let sz = vec2(10.0 + 7.0 + 7.0 + galley.size().x + 11.0, 26.0);
+                        let (pr, _) = ui.allocate_exact_size(sz, Sense::hover());
+                        ui.painter().rect(
+                            pr,
+                            CornerRadius::same(13),
+                            pill_bg,
+                            Stroke::new(1.0_f32, p.border),
+                            egui::StrokeKind::Inside,
+                        );
+                        ui.painter().circle_filled(pos2(pr.left() + 13.5, pr.center().y), 3.4, dot_color);
+                        ui.painter().text(
+                            pos2(pr.left() + 23.0, pr.center().y),
+                            egui::Align2::LEFT_CENTER,
+                            &pill_text,
+                            font,
+                            pill_fg,
+                        );
+                    }
 
-                    // Compact horizontal RAM pill (click to sleep model when loaded)
+                    // Exact-centered RAM pill (click to sleep model when loaded)
                     if self.ram_mb > 0.0 {
                         let loaded = self.ctrl.is_model_loaded();
                         let ram_text = format!("{:.0} MB", self.ram_mb);
-                        let resp = Frame::new()
-                            .fill(Color32::TRANSPARENT)
-                            .stroke(Stroke::new(1.0_f32, p.border))
-                            .corner_radius(CornerRadius::same(12))
-                            .inner_margin(Margin::symmetric(9, 4))
-                            .show(ui, |ui| {
-                                ui.horizontal(|ui| {
-                                    ui.label(
-                                        RichText::new(ram_text)
-                                            .size(11.5)
-                                            .color(if loaded { p.warn } else { p.text3 }),
-                                    );
-                                });
-                            })
-                            .response
-                            .interact(Sense::click())
-                            .on_hover_text(if loaded { s.sleep_tip } else { s.sleeping });
+                        let font = FontId::proportional(11.5);
+                        let col = if loaded { p.warn } else { p.text3 };
+                        let galley = ui.painter().layout_no_wrap(ram_text.clone(), font.clone(), col);
+                        let sz = vec2(galley.size().x + 20.0, 26.0);
+                        let (rr, resp) = ui.allocate_exact_size(sz, Sense::click());
+                        let resp = if loaded {
+                            resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+                        } else {
+                            resp
+                        }
+                        .on_hover_text(if loaded { s.sleep_tip } else { s.sleeping });
+                        ui.painter().rect(
+                            rr,
+                            CornerRadius::same(13),
+                            if resp.hovered() && loaded { p.surface2 } else { Color32::TRANSPARENT },
+                            Stroke::new(1.0_f32, p.border),
+                            egui::StrokeKind::Inside,
+                        );
+                        ui.painter().text(
+                            rr.center(),
+                            egui::Align2::CENTER_CENTER,
+                            &ram_text,
+                            font,
+                            col,
+                        );
                         if resp.clicked() && loaded && self.phase == Phase::Idle && self.importing.is_none() {
                             self.ctrl.sleep_model_now();
                         }
@@ -467,35 +492,43 @@ impl CronistaApp {
                         }
                         ui.add_space(6.0);
 
-                        // EN / ES segmented switch
-                        Frame::new()
-                            .fill(p.surface2)
-                            .stroke(Stroke::new(1.0_f32, p.border))
-                            .corner_radius(CornerRadius::same(8))
-                            .inner_margin(Margin::same(2))
-                            .show(ui, |ui| {
-                                ui.horizontal(|ui| {
-                                    ui.spacing_mut().item_spacing.x = 2.0;
-                                    for code in ["es", "en"] {
-                                        let active = self.lang == code;
-                                        let btn = egui::Button::new(
-                                            RichText::new(code.to_uppercase())
-                                                .font(semibold(11.5))
-                                                .color(if active { p.text } else { p.text3 }),
-                                        )
-                                        .fill(if active { p.surface3 } else { Color32::TRANSPARENT })
-                                        .stroke(Stroke::NONE)
-                                        .corner_radius(CornerRadius::same(6))
-                                        .min_size(vec2(28.0, 22.0));
-                                        if ui.add(btn).clicked() && !active {
-                                            self.lang = code.to_string();
-                                            self.ctrl.save_preferences(
-                                                Some(code), None, None, None, None, None, None,
-                                            );
-                                        }
-                                    }
-                                });
-                            });
+                        // Exact-centered EN / ES segmented pill (30px height, perfectly aligned!)
+                        let (seg_r, seg_resp) = ui.allocate_exact_size(vec2(68.0, 30.0), Sense::click());
+                        let seg_resp = seg_resp.on_hover_cursor(egui::CursorIcon::PointingHand);
+                        ui.painter().rect(
+                            seg_r,
+                            CornerRadius::same(8),
+                            p.surface2,
+                            Stroke::new(1.0_f32, p.border),
+                            egui::StrokeKind::Inside,
+                        );
+                        let half_w = (seg_r.width() - 6.0) * 0.5;
+                        let en_r = Rect::from_min_size(pos2(seg_r.left() + 3.0, seg_r.top() + 3.0), vec2(half_w, 24.0));
+                        let es_r = Rect::from_min_size(pos2(en_r.right(), seg_r.top() + 3.0), vec2(half_w, 24.0));
+                        for (code, r) in [("en", en_r), ("es", es_r)] {
+                            let active = self.lang == code;
+                            if active {
+                                ui.painter().rect_filled(r, CornerRadius::same(6), p.surface3);
+                            }
+                            ui.painter().text(
+                                r.center(),
+                                egui::Align2::CENTER_CENTER,
+                                code.to_uppercase(),
+                                semibold(11.5),
+                                if active { p.text } else { p.text3 },
+                            );
+                        }
+                        if seg_resp.clicked() {
+                            if let Some(pos) = seg_resp.interact_pointer_pos() {
+                                let chosen = if pos.x < seg_r.center().x { "en" } else { "es" };
+                                if self.lang != chosen {
+                                    self.lang = chosen.to_string();
+                                    self.ctrl.save_preferences(
+                                        Some(chosen), None, None, None, None, None, None,
+                                    );
+                                }
+                            }
+                        }
                     });
                 });
             });
@@ -553,10 +586,11 @@ impl CronistaApp {
             .show_separator_line(false)
             .frame(Frame::new().fill(p.surface).inner_margin(Margin::symmetric(14, 14)))
             .show(ctx, |ui| {
-                // Single crisp right divider
+                // Crisp outer panel divider placed at the exact right edge (outside the 14px margin)
                 let full = ui.max_rect();
+                let edge_x = full.right() + 13.5;
                 ui.painter().line_segment(
-                    [pos2(full.right(), full.top()), pos2(full.right(), full.bottom())],
+                    [pos2(edge_x, full.top() - 14.0), pos2(edge_x, full.bottom() + 14.0)],
                     Stroke::new(1.0_f32, p.border),
                 );
 
@@ -758,7 +792,10 @@ impl CronistaApp {
                                 ui.painter().rect_filled(bar, CornerRadius::same(2), p.accent);
                             }
 
-                            let click = resp.response.interact(Sense::click());
+                            let click = resp
+                                .response
+                                .interact(Sense::click())
+                                .on_hover_cursor(egui::CursorIcon::PointingHand);
                             if click.hovered() && !selected {
                                 ui.painter().rect_stroke(
                                     r,
@@ -985,6 +1022,11 @@ impl CronistaApp {
                                         sz,
                                         if busy { Sense::hover() } else { Sense::click() },
                                     );
+                                    let resp = if !busy {
+                                        resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+                                    } else {
+                                        resp
+                                    };
                                     let hov = !busy && resp.hovered();
                                     let fill = if is_sel {
                                         p.surface3
@@ -1107,6 +1149,8 @@ impl CronistaApp {
                 ui.add_space(18.0);
 
                 // ── Center Hero Stage: Machined Record Trigger + Studio Timecode + Acoustic Waveform
+                let hero_avail = ui.available_width();
+                let show_wave = hero_avail >= 560.0;
                 ui.horizontal(|ui| {
                     let can_start = self.phase == Phase::Idle
                         && self.importing.is_none()
@@ -1115,7 +1159,9 @@ impl CronistaApp {
                     let can_stop = matches!(self.phase, Phase::Listening | Phase::Recording);
                     let enabled = can_start || can_stop;
 
-                    if record_button(ui, active, enabled, time, p).clicked() && enabled {
+                    if record_button(ui, active, enabled, self.smoothed_audio_level, time, p).clicked()
+                        && enabled
+                    {
                         if self.phase == Phase::Idle {
                             self.live_phrases.clear();
                             self.live_partials.clear();
@@ -1137,65 +1183,90 @@ impl CronistaApp {
                     }
 
                     ui.add_space(18.0);
-                    ui.vertical(|ui| {
-                        ui.add_space(10.0);
-                        let timer_str = if self.phase == Phase::Recording {
-                            format_clock(self.elapsed_secs())
-                        } else {
-                            "00:00".to_string()
-                        };
-                        ui.label(
-                            RichText::new(timer_str)
-                                .font(semibold(48.0))
-                                .color(if active { p.text } else { p.text }),
-                        );
-                        ui.add_space(2.0);
-                        let hint = match self.phase {
-                            Phase::Idle => {
-                                if self.importing.is_some() {
-                                    s.hint_importing.to_string()
-                                } else {
-                                    match (self.record_mode, self.system_audio) {
-                                        (RecordMode::ScreenAndAudio, true) => {
-                                            s.hint_idle_screen_computer.into()
-                                        }
-                                        (RecordMode::ScreenAndAudio, false) => {
-                                            s.hint_idle_screen.into()
-                                        }
-                                        (RecordMode::AudioOnly, true) => {
-                                            s.hint_idle_audio_computer.into()
-                                        }
-                                        (RecordMode::AudioOnly, false) => {
-                                            s.hint_idle_audio.into()
+                    let text_max_w = if show_wave {
+                        (hero_avail - 94.0 - 18.0 - 216.0).max(200.0)
+                    } else {
+                        (hero_avail - 94.0 - 24.0).max(200.0)
+                    };
+                    ui.allocate_ui_with_layout(
+                        vec2(text_max_w, 94.0),
+                        Layout::top_down(Align::LEFT),
+                        |ui| {
+                            ui.add_space(10.0);
+                            let timer_str = if self.phase == Phase::Recording {
+                                format_clock(self.elapsed_secs())
+                            } else {
+                                "00:00".to_string()
+                            };
+                            ui.label(
+                                RichText::new(timer_str)
+                                    .font(semibold(48.0))
+                                    .color(p.text),
+                            );
+                            ui.add_space(2.0);
+                            let hint = match self.phase {
+                                Phase::Idle => {
+                                    if self.importing.is_some() {
+                                        s.hint_importing.to_string()
+                                    } else {
+                                        match (self.record_mode, self.system_audio) {
+                                            (RecordMode::ScreenAndAudio, true) => {
+                                                s.hint_idle_screen_computer.into()
+                                            }
+                                            (RecordMode::ScreenAndAudio, false) => {
+                                                s.hint_idle_screen.into()
+                                            }
+                                            (RecordMode::AudioOnly, true) => {
+                                                s.hint_idle_audio_computer.into()
+                                            }
+                                            (RecordMode::AudioOnly, false) => {
+                                                s.hint_idle_audio.into()
+                                            }
                                         }
                                     }
                                 }
-                            }
-                            Phase::Listening => s.hint_starting.into(),
-                            Phase::Recording => s.hint_recording.into(),
-                            Phase::Finishing => match self.finishing_progress {
-                                Some((pct, Some(eta))) => {
-                                    format!(
-                                        "{} · {}% · ~{}s",
-                                        s.hint_finishing,
-                                        (pct * 100.0) as u32,
-                                        eta
-                                    )
-                                }
-                                Some((pct, None)) => {
-                                    format!("{} · {}%", s.hint_finishing, (pct * 100.0) as u32)
-                                }
-                                None => s.hint_finishing.into(),
-                            },
-                        };
-                        ui.label(RichText::new(hint).size(13.0).color(p.text2));
-                    });
+                                Phase::Listening => s.hint_starting.into(),
+                                Phase::Recording => s.hint_recording.into(),
+                                Phase::Finishing => match self.finishing_progress {
+                                    Some((pct, Some(eta))) => {
+                                        format!(
+                                            "{} · {}% · ~{}s",
+                                            s.hint_finishing,
+                                            (pct * 100.0) as u32,
+                                            eta
+                                        )
+                                    }
+                                    Some((pct, None)) => {
+                                        format!("{} · {}%", s.hint_finishing, (pct * 100.0) as u32)
+                                    }
+                                    None => s.hint_finishing.into(),
+                                },
+                            };
+                            ui.add(
+                                egui::Label::new(RichText::new(hint).size(13.0).color(p.text2))
+                                    .wrap(),
+                            );
+                        },
+                    );
 
-                    // Right-aligned live studio acoustic waveform ribbon
-                    if ui.available_width() > 215.0 {
+                    // Right-aligned live organic center-outward LED matrix (wakes on hover & voice!)
+                    if show_wave {
+                        let hover_mix = ui.ctx().animate_bool_with_time(
+                            egui::Id::new("deck_matrix_hover"),
+                            self.deck_hovered,
+                            0.45,
+                        );
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            ui.add_space(6.0);
-                            studio_waveform(ui, active, self.importing.is_some(), time, p);
+                            ui.add_space(4.0);
+                            studio_waveform(
+                                ui,
+                                active,
+                                self.importing.is_some(),
+                                hover_mix,
+                                self.smoothed_audio_level,
+                                time,
+                                p,
+                            );
                         });
                     }
                 });
@@ -1223,18 +1294,25 @@ impl CronistaApp {
                                 .unwrap_or(s.no_mic);
 
                             ui.add_enabled_ui(!busy, |ui| {
-                                egui::ComboBox::from_id_salt("mic_select")
+                                let cb = egui::ComboBox::from_id_salt("mic_select")
                                     .width(235.0)
                                     .selected_text(RichText::new(current_mic_name).size(12.5))
                                     .show_ui(ui, |ui| {
                                         for m in &self.microphones {
                                             let selected =
                                                 self.selected_mic.as_deref() == Some(&m.id);
-                                            if ui.selectable_label(selected, &m.name).clicked() {
+                                            if ui
+                                                .selectable_label(selected, &m.name)
+                                                .on_hover_cursor(egui::CursorIcon::PointingHand)
+                                                .clicked()
+                                            {
                                                 self.selected_mic = Some(m.id.clone());
                                             }
                                         }
                                     });
+                                if !busy && cb.response.hovered() {
+                                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                                }
                             });
 
                             if self.record_mode == RecordMode::ScreenAndAudio {
@@ -1244,7 +1322,7 @@ impl CronistaApp {
                                     _ => s.quality_balanced,
                                 };
                                 ui.add_enabled_ui(!busy, |ui| {
-                                    egui::ComboBox::from_id_salt("quality_select")
+                                    let cb = egui::ComboBox::from_id_salt("quality_select")
                                         .width(116.0)
                                         .selected_text(
                                             RichText::new(q_label(&self.quality)).size(12.5),
@@ -1253,12 +1331,16 @@ impl CronistaApp {
                                             for &q in QUALITIES {
                                                 if ui
                                                     .selectable_label(self.quality == q, q_label(q))
+                                                    .on_hover_cursor(egui::CursorIcon::PointingHand)
                                                     .clicked()
                                                 {
                                                     self.quality = q.to_string();
                                                 }
                                             }
                                         });
+                                    if !busy && cb.response.hovered() {
+                                        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                                    }
                                 });
                             }
 
@@ -1370,6 +1452,7 @@ impl CronistaApp {
                                                 .corner_radius(CornerRadius::same(6))
                                                 .min_size(vec2(0.0, 24.0)),
                                             )
+                                            .on_hover_cursor(egui::CursorIcon::PointingHand)
                                             .clicked()
                                         {
                                             if let Ok(tr) = self.ctrl.set_transcription("standard")
@@ -1401,6 +1484,7 @@ impl CronistaApp {
                                                 .corner_radius(CornerRadius::same(6))
                                                 .min_size(vec2(0.0, 24.0)),
                                             )
+                                            .on_hover_cursor(egui::CursorIcon::PointingHand)
                                             .clicked()
                                         {
                                             match self.ctrl.set_transcription("high") {
@@ -1459,6 +1543,9 @@ impl CronistaApp {
                     });
             });
 
+        // Track hover smoothly across the entire Studio Deck for organic LED wake-up
+        self.deck_hovered = ui.rect_contains_pointer(deck.response.rect);
+
         // Subtle studio specular top-edge sheen on the deck
         paint_card_specular(ui.painter(), deck.response.rect, 18.0, p);
     }
@@ -1476,15 +1563,16 @@ impl CronistaApp {
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.horizontal(|ui| {
-                    let (badge, _) = ui.allocate_exact_size(Vec2::splat(36.0), Sense::hover());
-                    ui.painter().rect_filled(badge, CornerRadius::same(10), p.accent_soft);
-                    paint_icon(
-                        ui.painter(),
-                        Rect::from_center_size(badge.center(), Vec2::splat(16.0)),
-                        Icon::Waveform,
-                        p.accent_text,
-                    );
-                    ui.add_space(4.0);
+                    let time = ui.input(|i| i.time);
+                    Frame::new()
+                        .fill(p.bg)
+                        .stroke(Stroke::new(1.0_f32, p.border))
+                        .corner_radius(CornerRadius::same(10))
+                        .inner_margin(Margin::same(0))
+                        .show(ui, |ui| {
+                            dot_matrix_loader(ui, 5, 5, 38.0, time, p.accent, p);
+                        });
+                    ui.add_space(6.0);
                     ui.vertical(|ui| {
                         ui.label(RichText::new(&imp.name).font(semibold(14.0)).color(p.text));
                         let pct = (imp.progress * 100.0).round() as u32;
@@ -1631,7 +1719,8 @@ impl CronistaApp {
                     } else {
                         let title_resp = ui
                             .label(RichText::new(&rec.title).font(semibold(22.0)).color(p.text))
-                            .interact(Sense::click());
+                            .interact(Sense::click())
+                            .on_hover_cursor(egui::CursorIcon::PointingHand);
                         if title_resp.clicked() {
                             self.editing_title = true;
                         }
@@ -1812,7 +1901,8 @@ impl CronistaApp {
                                                 ui.label(RichText::new(who).font(semibold(11.5)).color(fg));
                                             })
                                             .response
-                                            .interact(Sense::click());
+                                            .interact(Sense::click())
+                                            .on_hover_cursor(egui::CursorIcon::PointingHand);
                                         if badge.clicked() {
                                             self.editing_detail_label = Some(src.to_string());
                                             self.detail_label_draft = who.clone();
@@ -1831,47 +1921,56 @@ impl CronistaApp {
 
     fn draw_empty_state(&mut self, ui: &mut egui::Ui, p: &ThemePalette) {
         let s = strings(&self.lang);
-        ui.add_space(6.0);
+        ui.add_space(4.0);
 
         let w = ui.available_width();
-        let (card_rect, resp) = ui.allocate_exact_size(vec2(w, 250.0), Sense::click());
+        let (card_rect, resp) = ui.allocate_exact_size(vec2(w, 286.0), Sense::click());
+        let resp = if self.phase == Phase::Idle {
+            resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+        } else {
+            resp
+        };
         let hovered = resp.hovered();
         let painter = ui.painter();
 
-        // Elevated translucent studio drop canvas with dashed border
+        // Crisp elevated studio drop canvas with smooth rounded dashed border (subtle hover tint)
         let fill = if hovered {
-            Color32::from_rgba_unmultiplied(
-                p.accent.r(),
-                p.accent.g(),
-                p.accent.b(),
-                if p.is_dark { 14 } else { 9 },
-            )
+            p.surface2
         } else {
-            Color32::from_rgba_unmultiplied(
-                p.surface.r(),
-                p.surface.g(),
-                p.surface.b(),
-                if p.is_dark { 195 } else { 225 },
-            )
+            p.surface
         };
         painter.rect_filled(card_rect, CornerRadius::same(18), fill);
+        if hovered {
+            painter.rect_filled(
+                card_rect,
+                CornerRadius::same(18),
+                Color32::from_rgba_unmultiplied(
+                    p.accent.r(),
+                    p.accent.g(),
+                    p.accent.b(),
+                    if p.is_dark { 10 } else { 7 },
+                ),
+            );
+        }
         paint_dashed_rect(
             painter,
             card_rect,
             18.0,
-            Stroke::new(1.2_f32, if hovered { p.accent } else { p.border_strong }),
-            6.0,
+            Stroke::new(
+                1.2_f32,
+                if hovered { p.accent } else { p.border_strong },
+            ),
+            7.0,
             5.0,
         );
-        paint_card_specular(painter, card_rect, 18.0, p);
 
-        // Centered content inside the drop canvas
+        // Centered content inside the drop canvas with generous top & bottom padding
         ui.allocate_new_ui(
             egui::UiBuilder::new()
-                .max_rect(card_rect.shrink2(vec2(28.0, 22.0)))
+                .max_rect(card_rect.shrink2(vec2(32.0, 28.0)))
                 .layout(Layout::top_down(Align::Center)),
             |ui| {
-                ui.add_space(8.0);
+                ui.add_space(6.0);
                 // Floating glowing studio emblem
                 let (emb_r, _) = ui.allocate_exact_size(Vec2::splat(64.0), Sense::hover());
                 let c = emb_r.center();
@@ -1898,13 +1997,13 @@ impl CronistaApp {
                 );
                 paint_cronista_logo(ui.painter(), c, 14.0, p);
 
-                ui.add_space(14.0);
+                ui.add_space(16.0);
                 ui.label(
                     RichText::new(s.empty_title)
                         .font(semibold(18.0))
                         .color(p.text),
                 );
-                ui.add_space(5.0);
+                ui.add_space(6.0);
                 ui.label(
                     RichText::new(if s.is_es {
                         "O arrastra cualquier video o audio aquí para transcribirlo al instante en tu PC."
@@ -1915,34 +2014,47 @@ impl CronistaApp {
                     .color(p.text2),
                 );
 
-                ui.add_space(16.0);
-                // Clean format pill row
-                ui.horizontal_wrapped(|ui| {
-                    ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
-                    let fmts = ["MP4", "MP3", "WAV", "M4A", "MKV", "MOV", "OGG", "FLAC"];
-                    let row_w = fmts.len() as f32 * 44.0 + (fmts.len() - 1) as f32 * 6.0;
-                    let pad = ((ui.available_width() - row_w) * 0.5).max(0.0);
-                    if pad > 0.0 {
-                        ui.add_space(pad);
-                    }
-                    for fmt in fmts {
-                        Frame::new()
-                            .fill(p.surface2)
-                            .stroke(Stroke::new(1.0_f32, p.border))
-                            .corner_radius(CornerRadius::same(6))
-                            .inner_margin(Margin::symmetric(8, 3))
-                            .show(ui, |ui| {
-                                ui.label(
-                                    RichText::new(fmt)
-                                        .font(FontId::monospace(10.5))
-                                        .color(p.text3),
-                                );
-                            });
-                    }
-                });
+                ui.add_space(18.0);
+                // Perfectly centered format pill row (measured from actual text widths)
+                let fmts = ["MP4", "MP3", "WAV", "M4A", "MKV", "MOV", "OGG", "FLAC"];
+                let pill_font = FontId::monospace(10.5);
+                let gap = 7.0_f32;
+                let pill_widths: Vec<f32> = fmts
+                    .iter()
+                    .map(|f| {
+                        ui.painter()
+                            .layout_no_wrap((*f).to_string(), pill_font.clone(), p.text3)
+                            .size()
+                            .x
+                            + 18.0
+                    })
+                    .collect();
+                let total_row_w: f32 =
+                    pill_widths.iter().sum::<f32>() + gap * (fmts.len().saturating_sub(1)) as f32;
+                let (row_rect, _) =
+                    ui.allocate_exact_size(vec2(total_row_w.min(ui.available_width()), 24.0), Sense::hover());
+                let mut x = row_rect.center().x - total_row_w * 0.5;
+                for (fmt, pw) in fmts.iter().zip(pill_widths.iter()) {
+                    let r = Rect::from_min_size(pos2(x, row_rect.top()), vec2(*pw, 22.0));
+                    ui.painter().rect(
+                        r,
+                        CornerRadius::same(6),
+                        p.surface2,
+                        Stroke::new(1.0_f32, p.border),
+                        egui::StrokeKind::Inside,
+                    );
+                    ui.painter().text(
+                        r.center(),
+                        egui::Align2::CENTER_CENTER,
+                        *fmt,
+                        pill_font.clone(),
+                        p.text2,
+                    );
+                    x += *pw + gap;
+                }
 
-                ui.add_space(14.0);
-                // Subtle privacy / capability caption
+                ui.add_space(16.0);
+                // Subtle privacy / capability caption with comfortable breathing room from bottom border
                 ui.label(
                     RichText::new(if s.is_es {
                         "100% Privado y sin nube  ·  Exporta a SRT, Word y PDF  ·  Haz clic para elegir un archivo"
@@ -1988,6 +2100,7 @@ impl CronistaApp {
                                 let selected = self.theme_id == id;
                                 let (rect, resp) =
                                     ui.allocate_exact_size(vec2(160.0, 36.0), Sense::click());
+                                let resp = resp.on_hover_cursor(egui::CursorIcon::PointingHand);
                                 let hovered = resp.hovered();
                                 let painter = ui.painter();
                                 let row_bg = if selected || hovered {
@@ -2091,6 +2204,7 @@ impl CronistaApp {
                                     .stroke(Stroke::NONE)
                                     .corner_radius(CornerRadius::same(8)),
                                 )
+                                .on_hover_cursor(egui::CursorIcon::PointingHand)
                                 .clicked()
                             {
                                 let was_file = rec.is_imported();
@@ -2147,7 +2261,11 @@ impl CronistaApp {
                             .fill(p.text)
                             .stroke(Stroke::NONE)
                             .corner_radius(CornerRadius::same(8));
-                            if ui.add(next_btn).clicked() {
+                            if ui
+                                .add(next_btn)
+                                .on_hover_cursor(egui::CursorIcon::PointingHand)
+                                .clicked()
+                            {
                                 if idx + 1 == steps.len() {
                                     self.tour_open = false;
                                     self.ctrl.save_preferences(
@@ -2302,6 +2420,18 @@ impl eframe::App for CronistaApp {
             }
         }
 
+        // Smoothly follow live audio RMS during recording (fast attack, organic release)
+        let target_lvl = if matches!(self.phase, Phase::Recording | Phase::Listening) {
+            self.ctrl.live_audio_level()
+        } else {
+            0.0
+        };
+        let coeff = if target_lvl > self.smoothed_audio_level { 0.42 } else { 0.14 };
+        self.smoothed_audio_level += (target_lvl - self.smoothed_audio_level) * coeff;
+        if self.smoothed_audio_level < 0.004 {
+            self.smoothed_audio_level = 0.0;
+        }
+
         let palette = palette_for(&self.theme_id, self.system_dark);
         self.draw_header(ctx, &palette);
         self.draw_sidebar(ctx, &palette);
@@ -2309,16 +2439,60 @@ impl eframe::App for CronistaApp {
         self.draw_overlays(ctx, &palette);
         handle_frameless_resize(ctx, &palette);
 
-        if matches!(self.phase, Phase::Recording | Phase::Listening) || self.importing.is_some() {
-            ctx.request_repaint_after(Duration::from_millis(45));
-        } else if self.toast.is_some() {
-            ctx.request_repaint_after(Duration::from_millis(300));
+        let is_animating_fast = matches!(
+            self.phase,
+            Phase::Recording | Phase::Listening | Phase::Finishing
+        ) || self.importing.is_some()
+            || self.deck_hovered
+            || matches!(
+                self.model_status,
+                ModelStatus::Loading | ModelStatus::Downloading { .. }
+            );
+        if is_animating_fast {
+            ctx.request_repaint_after(Duration::from_millis(33));
+        } else {
+            // Very gentle low-CPU tick (~12 fps) for the subtle 4.6s resting heartbeat
+            ctx.request_repaint_after(Duration::from_millis(85));
         }
     }
 }
 
-/// Enables smooth edge & corner resizing and draws a crisp 1px outer border on frameless windows.
+/// Enables native Windows 11 DWM rounded corners (DWMWCP_ROUND) on frameless windows.
+#[cfg(windows)]
+fn apply_windows_rounded_corners_once() {
+    use std::sync::Once;
+    static APPLIED: Once = Once::new();
+    APPLIED.call_once(|| {
+        use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
+        use windows::Win32::Graphics::Dwm::{
+            DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
+        };
+        use windows::Win32::System::Threading::GetCurrentThreadId;
+        use windows::Win32::UI::WindowsAndMessaging::EnumThreadWindows;
+
+        unsafe extern "system" fn cb(hwnd: HWND, _lparam: LPARAM) -> BOOL {
+            let pref = DWMWCP_ROUND;
+            let _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_WINDOW_CORNER_PREFERENCE,
+                &pref as *const _ as *const std::ffi::c_void,
+                std::mem::size_of_val(&pref) as u32,
+            );
+            BOOL(1)
+        }
+
+        unsafe {
+            let tid = GetCurrentThreadId();
+            let _ = EnumThreadWindows(tid, Some(cb), LPARAM(0));
+        }
+    });
+}
+
+/// Enables smooth edge & corner resizing and draws a crisp 1px rounded outer border on frameless windows.
 fn handle_frameless_resize(ctx: &egui::Context, p: &ThemePalette) {
+    #[cfg(windows)]
+    apply_windows_rounded_corners_once();
+
     let is_max = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
     if is_max {
         return;
@@ -2330,7 +2504,7 @@ fn handle_frameless_resize(ctx: &egui::Context, p: &ThemePalette) {
     ))
     .rect_stroke(
         screen,
-        CornerRadius::ZERO,
+        CornerRadius::same(8),
         Stroke::new(1.0_f32, p.border_strong),
         egui::StrokeKind::Inside,
     );

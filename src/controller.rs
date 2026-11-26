@@ -30,7 +30,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -143,6 +143,7 @@ pub struct AppController {
     import_stop: Arc<AtomicBool>,
     download_stop: Arc<AtomicBool>,
     parakeet_download_stop: Arc<AtomicBool>,
+    audio_level: Arc<AtomicU32>,
 }
 
 struct ControllerState {
@@ -204,6 +205,7 @@ impl AppController {
             import_stop: Arc::new(AtomicBool::new(false)),
             download_stop: Arc::new(AtomicBool::new(false)),
             parakeet_download_stop: Arc::new(AtomicBool::new(false)),
+            audio_level: Arc::new(AtomicU32::new(0.0_f32.to_bits())),
         });
 
         // Kiri-style background idle watcher: unloads Parakeet from RAM after idle timeout!
@@ -240,6 +242,10 @@ impl AppController {
 
     pub fn is_model_loaded(&self) -> bool {
         self.model_mgr.is_loaded_in_ram()
+    }
+
+    pub fn live_audio_level(&self) -> f32 {
+        f32::from_bits(self.audio_level.load(Ordering::Relaxed))
     }
 
     pub fn sleep_model_now(&self) -> bool {
@@ -743,6 +749,7 @@ impl AppController {
                 on_event,
                 refiner,
             );
+            session.set_audio_level_sink(Arc::clone(&ctrl.audio_level));
             if used_real_model {
                 let ctrl_rel = Arc::clone(&ctrl);
                 session.set_on_release_model(Box::new(move || {
